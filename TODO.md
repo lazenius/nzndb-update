@@ -1,7 +1,8 @@
-- [ ] 2026-06-26 AGENTS.md 최신 상태 반영 및 로컬 커밋
 
 
 ## 완료
+- [x] 2026-06-26 .omx ignore 처리 및 변경 요약 문서화
+- [x] 2026-06-26 AGENTS.md 최신 상태 반영 및 로컬 커밋
 - [x] 2026-06-26 academyinfo 문서 구조 정리 및 최신 운영 상태 반영
 - [x] 2026-06-26 서버 /var/www/html/update 초기 커밋 및 origin main 푸시
 - [x] 2026-06-26 lazenius/nzndb-update 생성 또는 확인 후 서버 origin 연결
