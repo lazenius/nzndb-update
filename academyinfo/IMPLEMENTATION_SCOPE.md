@@ -41,6 +41,12 @@
 3. 결측/반복 정책 고정
    - `body.items.item` 단건/배열 직렬화 정책
    - 빈 문자열/0/null 저장 규칙
+4. 지역 PK 보조키 확정
+   - `regional_indicator_list`의 `znNmRmk`(`region_rmk`)를 PK/unique key에 포함할지 실응답 기준으로 확정
+5. 연도별 코드체계 추적 여부 확정
+   - `getCodeBySeriesSystem`의 `svyYr`를 `code_list`에 저장할지 결정
+6. 학과 보조 코드 중복 저장 여부 확정
+   - `psbsDivCd`, `schlEstbDivCd`, `schlMjrCharCd`, `schlMjrStatCd`, `schlKndCd`를 `subject_list`에 직접 둘지, `school_list`/코드 테이블 join 정책으로 고정
 
 ### 3차 구현 범위
 
@@ -50,6 +56,8 @@
    - 지표명/설명/출처를 별도 마스터로 관리할지 결정
 3. 증분 수집 정책
    - 연도별 전체 재수집 vs 학교별 변경분 갱신
+4. 선택 컬럼 슬림화 검토
+   - `school_indicator_list.apy_yr`처럼 일부 API 전용 컬럼은 유지하되 적용 범위를 문서와 코드에 명시
 
 ### 구현 제외 범위
 
@@ -86,7 +94,7 @@
 - 코드/년도: 전체 교체 또는 upsert
 - 학교/학과: `(schl_id, svy_yr)` / `(schl_id, svy_yr, major_id)` 기준 upsert
 - 학교별 지표: `(api_id, indct_id, schl_id, svy_yr)` 기준 upsert
-- 지역별 지표: `(api_id, indct_id, schl_div_cd, region_name)` 기준 upsert
+- 지역별 지표: 우선 `(api_id, indct_id, schl_div_cd, region_name, region_rmk)` 기준 검토 후 upsert
 
 ---
 
@@ -106,6 +114,9 @@
    - 연도 전체
    - 학교 단위 재수집
    - 실패 페이지 재시도 단위
+6. 학과/코드 중복 저장 정책 확정
+   - `subject_list`에 코드성 컬럼을 직접 둘지
+   - `school_list`/`code_list` join으로만 조회할지
 
 ---
 
@@ -209,6 +220,7 @@
 3. 응답 `fieldType1~7` / `fieldVal1~7` → `regional_indicator_list` upsert
 
 완료 기준: 각 `getRegional*` 호출 성공, `regional_indicator_list`에 `(api_id, indct_id, schl_div_cd, region_name)` 중복 없음.
+실응답에서 `znNmRmk`가 구분자 역할을 하면 `region_rmk` 포함 unique/PK로 확정.
 
 ---
 
@@ -236,6 +248,8 @@
 - [ ] `getSchoolMajorInfo` 수동 호출 → `body.items.item` 단건/배열 케이스 확인
 - [ ] `numOfRows` 상한 결정 (100/500/1000 중 허용 최대값)
 - [ ] `DB_SCHEMA.md`의 직렬화 정책(`item` 단건/배열 처리) 실응답 기준으로 검토 완료
+- [ ] `getCodeBySeriesSystem` 수동 호출 또는 샘플 확보 → `svyYr` 저장 필요 여부 결정
+- [ ] 지역별 API 샘플 확보 → `znNmRmk`가 PK 구분자인지 확인
 
 ### Phase 1 — 코드/년도 체크리스트
 
@@ -275,6 +289,14 @@
 - [ ] `fieldType1~7` / `fieldVal1~7` 저장 정책 결정 및 적용 (`regional_indicator_list`)
 - [ ] `(api_id, indct_id, schl_div_cd, region_name)` PK 중복 없음
 - [ ] upsert 재실행 후 PK 충돌 없음
+- [ ] `znNmRmk` 값이 있는 응답 샘플 확인
+- [ ] 필요 시 `(api_id, indct_id, schl_div_cd, region_name, region_rmk)` 기준으로 PK/unique 재확정
+
+### Phase 2~3 공통 설계 체크리스트
+
+- [ ] `subject_list`에 본분교/설립구분/학교종류/학과상태/학과특성 코드값을 직접 저장할지 결정
+- [ ] 직접 저장하지 않으면 `school_list`/`code_list` join 정책을 문서에 명시
+- [ ] `school_indicator_list.apy_yr` 적용 API 목록을 구현 문서에 명시
 
 ### Phase 6 — 산학협력 체크리스트
 

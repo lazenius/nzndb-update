@@ -1,21 +1,7 @@
-<!-- 다음 세션 시작 메모 — 자동 생성, 수동 편집 금지 -->
-> **마지막 세션:** 2026-06-25 | 커밋 `aa50e81`
->
-> **완료한 작업:**
-> - academyinfo omx team 후속 문서 보강 완료
-> - academyinfo 매핑 리포트 기준으로 API/DB 스키마 문서 반영 완료
->
-> **남은 작업:**
-> - caveman 모드 적용 대상 확인 및 응답
-> - career/OpenAPIExample 샘플의 OpenAPI 키 하드코딩 제거 또는 비공개 처리
->
-> **다음에 시작할 곳:** `academyinfo/IMPLEMENTATION_SCOPE.md`와 `MAPPING_GAP_REPORT.md` 기준 남은 Medium/Low 항목 정리
-<!-- /다음 세션 시작 메모 -->
-
-- [ ] caveman 모드 적용 대상 확인 및 응답
-- [ ] [버그] career/OpenAPIExample 샘플의 OpenAPI 키 하드코딩 제거 또는 비공개 처리
-
 ## 완료
+- [x] 2026-06-25 [버그] career/OpenAPIExample 샘플의 OpenAPI 키 하드코딩 제거
+- [x] 2026-06-25 academyinfo IMPLEMENTATION_SCOPE.md에 Medium/Low 매핑 누락 반영 정리
+- [x] 2026-06-25 caveman 모드 적용 대상 확인 및 응답
 - [x] 2026-06-25 academyinfo 매핑 리포트 기준 문서 후속 반영
 - [x] 2026-06-25 academyinfo 문서 기준 omx team 후속 작업 진행
 - [x] 2026-06-25 academyinfo 9개 OpenAPI 세부 명세 분석 및 문서 초안 작성
