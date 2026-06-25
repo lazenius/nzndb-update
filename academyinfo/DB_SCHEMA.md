@@ -3,6 +3,7 @@
 ## 기준
 
 - 기준 문서: `academyinfo/API_SPEC.md`
+- 매핑 점검 보고서: `academyinfo/MAPPING_GAP_REPORT.md`
 - 기준 목록: `academyinfo/README.md`
 - 기준 DB: `ACADEMYINFO_DB`
 - 명명 기준은 기존 문서와 동일하게 `*_list`, 공통 `recv_time` 우선 사용
@@ -169,6 +170,14 @@ CREATE TABLE ACADEMYINFO_DB.school_list (
 | `lst_updt_dtm` | 원천 최종수정시각 |
 | `recv_time` | 수집시각 |
 
+**수집/merge 기준**
+
+1. `getUniversityCode`로 코드값 중심 row를 먼저 upsert
+2. `getSchoolInfo`로 주소/연락처/영문명/설립일을 같은 `(schl_id, svy_yr)` row에 보완 upsert
+3. `getNoticeUniversitySearchList`, `getComparisonUniversitySearchList`는 학교 존재 확인 + 일부 명칭 보정 용도로만 사용
+
+즉 `school_list`는 **단일 API 완결 테이블이 아니라 `(schl_id, svy_yr)` 기준 merge 테이블**로 본다.
+
 ### 4. `subject_list`
 
 대학별 학과 기본정보 테이블. 실제 의미는 major list지만 기존 관례에 맞춰 `subject_list` 유지.
@@ -177,10 +186,17 @@ CREATE TABLE ACADEMYINFO_DB.school_list (
 CREATE TABLE ACADEMYINFO_DB.subject_list (
     schl_id varchar(20) NOT NULL,
     svy_yr char(4) NOT NULL,
+    schl_mjr_id varchar(30) NOT NULL,
     major_id varchar(30) NOT NULL,
     std_major_id varchar(30) NOT NULL default '',
     name varchar(150) NOT NULL,
     college_name varchar(100) NOT NULL default '',
+    srs_lclft_cd varchar(20) NOT NULL default '',
+    srs_lclft_name varchar(100) NOT NULL default '',
+    srs_mclft_cd varchar(20) NOT NULL default '',
+    srs_mclft_name varchar(100) NOT NULL default '',
+    srs_sclft_cd varchar(20) NOT NULL default '',
+    srs_sclft_name varchar(100) NOT NULL default '',
     area_cd varchar(20) NOT NULL default '',
     area_name varchar(50) NOT NULL default '',
     area_signgu_cd varchar(20) NOT NULL default '',
@@ -199,7 +215,8 @@ CREATE TABLE ACADEMYINFO_DB.subject_list (
     major_updt_dtm varchar(30) NOT NULL default '',
     lst_updt_dtm varchar(30) NOT NULL default '',
     recv_time datetime NOT NULL,
-    PRIMARY KEY (schl_id, svy_yr, major_id),
+    PRIMARY KEY (schl_id, svy_yr, schl_mjr_id),
+    KEY (major_id),
     KEY (name),
     KEY (area_cd),
     KEY (schl_id)
@@ -209,10 +226,14 @@ CREATE TABLE ACADEMYINFO_DB.subject_list (
 
 | 필드 | 설명 |
 |---|---|
+| `schl_mjr_id` | 학교 자체 학과 식별자 (`schlMjrId`) |
 | `major_id` | `kediMjrId` |
 | `std_major_id` | `stdClftMjrId` |
 | `name` | `korMjrNm` |
 | `college_name` | `clgNm` |
+| `srs_lclft_*` | 표준분류 대계열 코드/명 |
+| `srs_mclft_*` | 표준분류 중계열 코드/명 |
+| `srs_sclft_*` | 표준분류 소계열 코드/명 |
 | `area_*` | 학과 지역/권역 |
 | `degree_name` | 학위과정 |
 | `lesson_term_name` | 수업연한 |
@@ -224,6 +245,9 @@ CREATE TABLE ACADEMYINFO_DB.subject_list (
 | `edu_course_text` | 교육과정/교육목표 계열 원문 |
 | `employ_path_text` | 진로/취업 설명 원문 |
 | `recv_time` | 수집시각 |
+
+- `major_id(kediMjrId)`는 표준 분류 ID라 학교별 row 식별자로 단독 사용하지 않는다.
+- `subject_list`의 row 식별자는 `schl_mjr_id`를 우선 사용하고, `major_id`는 표준 분류 조인용 보조키로 둔다.
 
 ### 5. `school_indicator_list`
 
@@ -267,7 +291,7 @@ CREATE TABLE ACADEMYINFO_DB.school_indicator_list (
 | `schl_id` | 학교 식별자 |
 | `svy_yr` | 공시년도 |
 | `indct_yr` | 지표 기준년도 |
-| `apy_yr` | 적용년도 |
+| `apy_yr` | 적용년도 (`getNoticeGraduateEmploymentRate` 계열 중심) |
 | `val1`~`val10` | `indctVal*` 계열 공용 수용 컬럼 |
 | `avg_val` | `indctAvg` |
 | `img_url` | `indctImg` |
@@ -316,7 +340,7 @@ CREATE TABLE ACADEMYINFO_DB.regional_indicator_list (
     second_schl_cnt varchar(30) NOT NULL default '',
     third_schl_cnt varchar(30) NOT NULL default '',
     recv_time datetime NOT NULL,
-    PRIMARY KEY (api_id, indct_id, schl_div_cd, region_name),
+    PRIMARY KEY (api_id, indct_id, schl_div_cd, region_name, region_rmk),
     KEY (schl_div_cd),
     KEY (indct_id),
     KEY (api_id, indct_id)
@@ -335,6 +359,7 @@ CREATE TABLE ACADEMYINFO_DB.regional_indicator_list (
 - **fieldType 계열**: 응답에 `znNm`(지역명) 없음 → `region_name=''`로 적재, `field_type*/field_val*` 컬럼 사용
 - **3개년도 비교 계열**: `znNm`→`region_name`, `znNmRmk`→`region_rmk`, `first~/second~/third~` 컬럼 사용
 - 두 패턴 모두 `indctId`를 응답에 포함하므로 PK의 `indct_id` 구성 유효
+- `region_rmk`는 일부 지역통계 API에서 실질 구분자 역할을 할 수 있으므로 PK에 포함한다.
 
 ### 7. `startup_support_list`
 
@@ -345,11 +370,14 @@ CREATE TABLE ACADEMYINFO_DB.startup_support_list (
     api_id varchar(80) NOT NULL,
     schl_id varchar(20) NOT NULL,
     svy_yr char(4) NOT NULL,
+    indct_id varchar(30) NOT NULL,
+    indct_yr char(4) NOT NULL default '',
     seq int unsigned NOT NULL,
     item_key varchar(50) NOT NULL,
     item_value varchar(300) NOT NULL,
     recv_time datetime NOT NULL,
-    PRIMARY KEY (api_id, schl_id, svy_yr, seq, item_key),
+    PRIMARY KEY (api_id, schl_id, svy_yr, indct_id, seq, item_key),
+    KEY (indct_id),
     KEY (item_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -357,6 +385,8 @@ CREATE TABLE ACADEMYINFO_DB.startup_support_list (
 | 필드 | 설명 |
 |---|---|
 | `api_id` | 산학협력 엔드포인트명 (예: `getContractMajorCrntSt`) |
+| `indct_id` | 산학협력 지표 식별자 |
+| `indct_yr` | 지표 기준년도 |
 | `seq` | 동일 학교/년도 내 행 반복순번. 원천 응답에 순번 없을 시 수집 루프에서 1부터 부여 |
 | `item_key` | 원천 응답 필드명 (카멜케이스 그대로 사용 가능) |
 | `item_value` | 원천 응답 값 (varchar 300) |
