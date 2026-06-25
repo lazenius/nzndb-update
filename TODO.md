@@ -1,4 +1,12 @@
+- [ ] 2026-06-26 AGENTS.md 최신 상태 반영 및 로컬 커밋
+
+
 ## 완료
+- [x] 2026-06-26 academyinfo 문서 구조 정리 및 최신 운영 상태 반영
+- [x] 2026-06-26 서버 /var/www/html/update 초기 커밋 및 origin main 푸시
+- [x] 2026-06-26 lazenius/nzndb-update 생성 또는 확인 후 서버 origin 연결
+- [x] 2026-06-26 서버 /var/www/html/update git 저장소 초기화
+- [x] 2026-06-25 academyinfo 103개 스펙 주기 산정, 수집기 작성, cron 등록
 - [x] 2026-06-25 [버그] career/OpenAPIExample 샘플의 OpenAPI 키 하드코딩 제거
 - [x] 2026-06-25 academyinfo IMPLEMENTATION_SCOPE.md에 Medium/Low 매핑 누락 반영 정리
 - [x] 2026-06-25 caveman 모드 적용 대상 확인 및 응답
