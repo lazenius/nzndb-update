@@ -1,0 +1,12 @@
+DB_HOST = '127.0.0.1'
+DB_PORT = 3306
+DB_USER = 'academyinfo'
+DB_PASS = 'change-me'
+DB_NAME = 'ACADEMYINFO_DB'
+
+SERVICE_KEY = 'YOUR_DATA_GO_KR_SERVICE_KEY'
+BASE_API_URL = 'https://apis.data.go.kr'
+
+# 필요하면 절대경로로 바꿔도 된다.
+RAW_DIR = 'academyinfo/raw'
+LOG_DIR = 'academyinfo/logs'

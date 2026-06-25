@@ -1,0 +1,10 @@
+# 비밀값 / 로컬 설정
+academyinfo/include/common_local.py
+career/include/common.py
+
+# 런타임 산출물
+academyinfo/logs/
+academyinfo/raw/
+__pycache__/
+*.pyc
+.DS_Store
