@@ -4,9 +4,11 @@
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 
-- [ ] academyinfo sync-subject-master 장기 실행 원인 확인 및 필요시 중단
+- [ ] [버그] career sync-code-list 로그 건수 0 표시 원인 확인
 
 ## 완료
+- [x] 2026-06-26 로컬 career 스냅샷을 서버 기준 코드/문서로 동기화
+- [x] 2026-06-26 academyinfo sync-subject-master 장기 실행 원인 확인 및 필요시 중단
 - [x] 2026-06-26 academyinfo sync-subject-master 원인 분석 및 배치 단위 실행 수정
 - [x] 2026-06-26 서버 개발/테스트 기준으로 파일 구조 및 문서 정리
 - [x] 2026-06-26 .omx ignore 처리 및 변경 요약 문서화
@@ -35,4 +37,3 @@
 - [x] 2026-06-26 career COLLECTION_PLAN.md 작성
 - [x] 2026-06-26 career 수집기 초안 작성
 - [x] 2026-06-26 career 서버 설정 연결 및 1회 검증
-- [ ] [버그] career sync-code-list 로그 건수 0 표시 원인 확인
