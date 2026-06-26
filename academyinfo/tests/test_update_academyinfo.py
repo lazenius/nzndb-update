@@ -118,6 +118,31 @@ class UpdateAcademyinfoTest(unittest.TestCase):
             ('/getComparisonLibraryBudgetCrntSt', '0002'),
         ], visited)
 
+    def test_sync_startup_support_uses_school_batch(self):
+        module = load_module()
+        visited = []
+
+        module.load_schools = lambda cur, scope='latest': [
+            {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
+            {'schl_id': '0002', 'svy_yr': '2025', 'name': '학교2'},
+            {'schl_id': '0003', 'svy_yr': '2025', 'name': '학교3'},
+        ]
+        module.fetch_pages = lambda endpoint, params, job_name: visited.append((endpoint['path'], params['schlId'])) or []
+        module.insert_startup_support = lambda cur, api_id, item, params, seq_no: None
+        module.log = lambda message: None
+
+        module.sync_startup_support(
+            None,
+            [{'path': '/getStupEdcSuptCstt', 'required_params': []}],
+            'latest',
+            school_offset=1,
+            school_limit=1,
+        )
+
+        self.assertEqual([
+            ('/getStupEdcSuptCstt', '0002'),
+        ], visited)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -105,7 +105,7 @@
 
 - `job.json`
 
-### 배치 F — 후속 확장 시 매월 4일 02:30
+### 배치 F — 매월 4일 02:30
 
 학과 상세 전체 재수집
 
@@ -118,10 +118,6 @@
 20 2 * * 1 cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-job-list >> logs/sync_job_list.log 2>&1
 30 2 3 * * cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-job-detail >> logs/sync_job_detail.log 2>&1
 ```
-
-## 서버 추가 cron 초안
-
-아래 명령은 코드 기준으로는 즉시 사용 가능하지만, 서버 실등록/실행 증거는 별도 확인이 필요하다.
 
 ```cron
 0 3 * * 1 cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-school-list >> logs/sync_school_list.log 2>&1
@@ -137,15 +133,16 @@
 4. 학교/학과 목록 API 실응답 확보
 5. `school_list`, `subject_list` 수집기 구현 및 1회 실적재 검증
 6. 서버 확장 배치 cron 실등록
-7. 학과 상세 적재기 구현
+7. 학과 상세 적재기 구현 및 서버 월배치 검증
 
 ## 검증 포인트
 
 - `jobs.json` 목록에서 상세 수집 대상 키를 안정적으로 확보할 수 있어야 한다.
 - `job.json` 반복 노드는 직업코드 기준 삭제 후 재적재 방식이 단순하다.
 - `edu_chart`, `major_chart`, `indicator_chart`는 현재 PK가 단순해 실응답 기준 재검토가 필요하다.
-- 학교/학과 명령은 구현돼 있지만, 정기 cron 편성 전에는 서버 로그 기준 운영 건수 검증이 더 필요하다.
-- `sync-all`은 현재 학교/학과를 포함하지 않으므로, 운영 시 `sync-school-list`, `sync-subject-list`를 별도 cron 으로 본다는 점을 유지해야 한다.
+- 학교/학과 목록 명령은 구현 및 정기 cron 편성까지 반영됐다.
+- 학과 상세 명령은 구현 및 정기 cron 편성까지 반영됐고, 서버 수동 스모크 검증이 추가로 필요하다.
+- `sync-all`은 이제 학교/학과 목록과 학과 상세까지 함께 수행하지만, 운영 cron은 여전히 개별 로그 분리를 위해 별도 명령 기준을 유지한다.
 
 ## 현재 반영 상태
 
@@ -155,10 +152,11 @@
   - `sync-code-list`
   - `sync-job-list`
   - `sync-job-detail`
-- 학교/학과 명령 구현 및 서버 1회 실적재 검증 완료
+- 학교/학과 목록 명령 구현 및 서버 1회 실적재 검증 완료
   - `sync-school-list`
   - `sync-subject-list`
+- 학과 상세 명령 구현 완료
+  - `sync-subject-detail`
 - 남은 과제
-  - school/subject 정기 cron 확장
+  - subject-detail 서버 1회 수동 실행 검증
   - school/subject 주기별 적재 건수/로그 검증
-  - 학과 상세 계열 구현 여부 결정

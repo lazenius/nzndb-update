@@ -184,6 +184,80 @@ CREATE_STATEMENTS = [
         PRIMARY KEY (jcode, seq)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_detail_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        name varchar(100) NOT NULL,
+        salary varchar(50) NOT NULL,
+        employment varchar(50) NOT NULL,
+        department text NOT NULL,
+        summary text NOT NULL,
+        job text NOT NULL,
+        qualifications text NOT NULL,
+        interest text NOT NULL,
+        property text NOT NULL,
+        purpose text NOT NULL,
+        relatedjob text NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_text_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        section varchar(30) NOT NULL,
+        item_seq smallint unsigned NOT NULL,
+        item_name varchar(100) NOT NULL,
+        item_desc text NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq, section, item_seq)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_school_map (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        item_seq smallint unsigned NOT NULL,
+        school_name varchar(100) NOT NULL,
+        area varchar(50) NOT NULL,
+        school_url varchar(300) NOT NULL,
+        campus varchar(50) NOT NULL,
+        major_name varchar(100) NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq, item_seq),
+        KEY school_name_idx (school_name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_chart_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        chart_type varchar(30) NOT NULL,
+        item_seq smallint unsigned NOT NULL,
+        item_name varchar(100) NOT NULL,
+        item_label varchar(100) NOT NULL,
+        item_value varchar(50) NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq, chart_type, item_seq)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_feature_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        feature_group varchar(30) NOT NULL,
+        feature_type varchar(20) NOT NULL,
+        item_seq smallint unsigned NOT NULL,
+        item_name varchar(100) NOT NULL,
+        rank_no varchar(10) NOT NULL,
+        order_no varchar(10) NOT NULL,
+        pct varchar(20) NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq, feature_group, feature_type, item_seq)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
 ]
 
 
@@ -410,6 +484,20 @@ def xml_text(node, name):
     return text(child.text)
 
 
+def xml_child(node, name):
+    child = node.find(name)
+    if child is None:
+        return None
+    return child
+
+
+def xml_contents(node, name):
+    child = xml_child(node, name)
+    if child is None:
+        return []
+    return child.findall('content')
+
+
 def upsert_code_rows(rows):
     conn = connect_db(common.DB_NAME)
     try:
@@ -551,6 +639,215 @@ def sync_subject_list():
         total += len(nodes)
         log(f'{gubun}: {len(nodes)}건 적재 ({common.safe_url(url)})')
     log(f'subject_list 동기화 완료: 총 {total}건')
+
+
+def load_subject_rows(cur, school='', limit=0):
+    sql = f'SELECT school, seq FROM {common.DB_NAME}.subject_list'
+    params = []
+    if school:
+        sql += ' WHERE school = %s'
+        params.append(school)
+    sql += ' ORDER BY school, seq'
+    if limit > 0:
+        sql += ' LIMIT %s'
+        params.append(limit)
+    cur.execute(sql, params)
+    return cur.fetchall()
+
+
+def fetch_subject_detail(school_key, seq):
+    params = {
+        'svcCode': 'MAJOR_VIEW',
+        'gubun': f'{school_key}_list',
+        'majorSeq': seq,
+        'thisPage': 1,
+        'perPage': 1000,
+    }
+    return fetch_legacy_xml(params)
+
+
+def delete_subject_detail_rows(cur, table_name, school_key, seq):
+    cur.execute(f'DELETE FROM {common.DB_NAME}.{table_name} WHERE school = %s AND seq = %s', (school_key, seq))
+
+
+def replace_subject_detail(cur, school_key, seq, node):
+    delete_subject_detail_rows(cur, 'subject_detail_list', school_key, seq)
+    cur.execute(
+        f"""
+        INSERT INTO {common.DB_NAME}.subject_detail_list (
+            school, seq, name, salary, employment, department, summary,
+            job, qualifications, interest, property, purpose, relatedjob, recv_time
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            school_key,
+            seq,
+            first_text(xml_text(node, 'major'), xml_text(node, 'majorName'))[:100],
+            xml_text(node, 'salary')[:50],
+            xml_text(node, 'employment')[:50],
+            xml_text(node, 'department'),
+            xml_text(node, 'summary'),
+            xml_text(node, 'job'),
+            xml_text(node, 'qualifications'),
+            xml_text(node, 'interest'),
+            xml_text(node, 'property'),
+            xml_text(node, 'purpose'),
+            first_text(xml_text(node, 'relatedjob'), xml_text(node, 'relatedjob ')),
+        ),
+    )
+
+
+def replace_subject_text_rows(cur, school_key, seq, section, rows, name_key, desc_key):
+    cur.execute(
+        f'DELETE FROM {common.DB_NAME}.subject_text_list WHERE school = %s AND seq = %s AND section = %s',
+        (school_key, seq, section),
+    )
+    for idx, row in enumerate(rows, start=1):
+        name = first_text(xml_text(row, name_key), xml_text(row, 'name'), xml_text(row, 'item'))
+        desc = first_text(xml_text(row, desc_key), xml_text(row, 'description'), xml_text(row, 'desc'), xml_text(row, 'summary'))
+        if name == '' and desc == '':
+            continue
+        cur.execute(
+            f"""
+            INSERT INTO {common.DB_NAME}.subject_text_list (
+                school, seq, section, item_seq, item_name, item_desc, recv_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (school_key, seq, section, idx, name[:100], desc),
+        )
+
+
+def replace_subject_school_rows(cur, school_key, seq, rows):
+    delete_subject_detail_rows(cur, 'subject_school_map', school_key, seq)
+    for idx, row in enumerate(rows, start=1):
+        cur.execute(
+            f"""
+            INSERT INTO {common.DB_NAME}.subject_school_map (
+                school, seq, item_seq, school_name, area, school_url, campus, major_name, recv_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (
+                school_key,
+                seq,
+                idx,
+                xml_text(row, 'schoolName')[:100],
+                xml_text(row, 'area')[:50],
+                xml_text(row, 'schoolURL')[:300],
+                xml_text(row, 'campus_nm')[:50],
+                xml_text(row, 'majorName')[:100],
+            ),
+        )
+
+
+def replace_subject_chart_rows(cur, school_key, seq, chart_type, rows):
+    cur.execute(
+        f'DELETE FROM {common.DB_NAME}.subject_chart_list WHERE school = %s AND seq = %s AND chart_type = %s',
+        (school_key, seq, chart_type),
+    )
+    for idx, row in enumerate(rows, start=1):
+        cur.execute(
+            f"""
+            INSERT INTO {common.DB_NAME}.subject_chart_list (
+                school, seq, chart_type, item_seq, item_name, item_label, item_value, recv_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (
+                school_key,
+                seq,
+                chart_type,
+                idx,
+                first_text(xml_text(row, 'item'), xml_text(row, 'IEM'))[:100],
+                first_text(xml_text(row, 'name'), xml_text(row, 'NM'))[:100],
+                first_text(xml_text(row, 'data'), xml_text(row, 'DATA'))[:50],
+            ),
+        )
+
+
+def replace_subject_feature_rows(cur, school_key, seq, feature_group, feature_type, rows):
+    cur.execute(
+        f"""
+        DELETE FROM {common.DB_NAME}.subject_feature_list
+        WHERE school = %s AND seq = %s AND feature_group = %s AND feature_type = %s
+        """,
+        (school_key, seq, feature_group, feature_type),
+    )
+    for idx, row in enumerate(rows, start=1):
+        cur.execute(
+            f"""
+            INSERT INTO {common.DB_NAME}.subject_feature_list (
+                school, seq, feature_group, feature_type, item_seq, item_name, rank_no, order_no, pct, recv_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (
+                school_key,
+                seq,
+                feature_group,
+                feature_type,
+                idx,
+                first_text(xml_text(row, 'GEN_NM'), xml_text(row, 'SCH_CLASS_NM'), xml_text(row, 'CD_NM'))[:100],
+                xml_text(row, 'RANK')[:10],
+                xml_text(row, 'CD_ORDR')[:10],
+                xml_text(row, 'PCNT')[:20],
+            ),
+        )
+
+
+def sync_subject_detail(school='', seq=0, limit=0):
+    if seq > 0 and school == '':
+        raise ValueError('subject 상세 단건 수집 시 --school 은 필수입니다')
+    ensure_tables()
+    conn = connect_db(common.DB_NAME)
+    try:
+        with conn.cursor() as cur:
+            if seq > 0:
+                targets = [{'school': school, 'seq': seq}]
+            else:
+                targets = load_subject_rows(cur, school=school, limit=limit)
+
+            for row in targets:
+                school_key = text(row['school'])
+                subject_seq = int_or_zero(row['seq'])
+                url, payload = fetch_subject_detail(school_key, subject_seq)
+                save_raw(
+                    'sync_subject_detail',
+                    f'{school_key}-{subject_seq}.json',
+                    {'url': common.safe_url(url), 'xml': payload},
+                )
+                nodes = parse_xml_contents(payload)
+                if not nodes:
+                    log(f'subject {school_key}/{subject_seq}: 상세 데이터 없음 ({common.safe_url(url)})')
+                    continue
+                node = nodes[0]
+                replace_subject_detail(cur, school_key, subject_seq, node)
+                replace_subject_text_rows(cur, school_key, subject_seq, 'relate_subject', xml_contents(node, 'relate_subject'), 'subject_name', 'subject_description')
+                replace_subject_text_rows(cur, school_key, subject_seq, 'career_act', xml_contents(node, 'career_act'), 'act_name', 'act_description')
+                replace_subject_text_rows(cur, school_key, subject_seq, 'enter_field', xml_contents(node, 'enter_field'), 'gradeuate', 'description')
+                replace_subject_text_rows(cur, school_key, subject_seq, 'main_subject', xml_contents(node, 'main_subject'), 'SBJECT_NM', 'SBJECT_SUMRY')
+
+                school_rows = xml_contents(node, 'setshl')
+                if not school_rows:
+                    school_rows = xml_contents(node, 'university')
+                replace_subject_school_rows(cur, school_key, subject_seq, school_rows)
+
+                chart_data = xml_child(node, 'chartData')
+                if chart_data is not None:
+                    for chart_type in ('applicant', 'gender', 'employment_rate', 'field', 'avg_salary', 'satisfaction', 'after_graduation'):
+                        replace_subject_chart_rows(cur, school_key, subject_seq, chart_type, xml_contents(chart_data, chart_type))
+                replace_subject_chart_rows(cur, school_key, subject_seq, 'graduation_gender', xml_contents(node, 'graduation_gender'))
+
+                for feature_group in ('GenCD', 'SchClass', 'lstMiddleAptd', 'lstHighAptd', 'lstVals'):
+                    group_node = xml_child(node, feature_group)
+                    if group_node is None:
+                        replace_subject_feature_rows(cur, school_key, subject_seq, feature_group, 'popular', [])
+                        replace_subject_feature_rows(cur, school_key, subject_seq, feature_group, 'bookmark', [])
+                        continue
+                    replace_subject_feature_rows(cur, school_key, subject_seq, feature_group, 'popular', xml_contents(group_node, 'popular'))
+                    replace_subject_feature_rows(cur, school_key, subject_seq, feature_group, 'bookmark', xml_contents(group_node, 'bookmark'))
+
+                log(f'subject {school_key}/{subject_seq}: 상세 동기화 완료 ({common.safe_url(url)})')
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def sync_code_list():
@@ -885,7 +1182,9 @@ def sync_job_detail(seq=0, limit=0):
 def sync_all(args):
     sync_code_list()
     sync_job_list(keyword=args.keyword, max_pages=args.max_pages)
+    sync_subject_list()
     sync_job_detail(limit=args.detail_limit)
+    sync_subject_detail(limit=args.subject_detail_limit)
 
 
 def build_parser():
@@ -897,6 +1196,11 @@ def build_parser():
     sub.add_parser('sync-code-list')
     sub.add_parser('sync-school-list')
     sub.add_parser('sync-subject-list')
+
+    subject_detail_parser = sub.add_parser('sync-subject-detail')
+    subject_detail_parser.add_argument('--school', default='')
+    subject_detail_parser.add_argument('--seq', type=int, default=0)
+    subject_detail_parser.add_argument('--limit', type=int, default=0)
 
     job_list_parser = sub.add_parser('sync-job-list')
     job_list_parser.add_argument('--keyword', default='')
@@ -910,6 +1214,7 @@ def build_parser():
     sync_all_parser.add_argument('--keyword', default='')
     sync_all_parser.add_argument('--max-pages', type=int, default=0)
     sync_all_parser.add_argument('--detail-limit', type=int, default=0)
+    sync_all_parser.add_argument('--subject-detail-limit', type=int, default=0)
     return parser
 
 
@@ -932,6 +1237,9 @@ def main():
         return
     if args.command == 'sync-subject-list':
         sync_subject_list()
+        return
+    if args.command == 'sync-subject-detail':
+        sync_subject_detail(school=args.school, seq=args.seq, limit=args.limit)
         return
     if args.command == 'sync-job-list':
         sync_job_list(keyword=args.keyword, max_pages=args.max_pages)

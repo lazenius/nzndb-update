@@ -16,7 +16,7 @@
 | 코드 마스터 | 3 | `code_list` | 예 | 예 | `sync-code-list`로 운영 |
 | 직업 목록/상세 | 2 | `job_list`, `job_work_list`, `interest_list`, `research_list`, `job_ready_list`, `forecast_list`, `perform_list`, `ability_list`, `depart_list`, `tag_list`, `job_rel_org_list` | 예 | 예 | `sync-job-list`, `sync-job-detail` 운영 |
 | 학교 정보 | 6 | `school_list` | 예 | 예 | `sync-school-list` 구현 완료, 서버 정기 cron 편성은 후속 |
-| 학과 정보 | 2 | `subject_list` | 예 | 예 | `sync-subject-list` 구현 완료, 서버 정기 cron 편성은 후속 |
+| 학과 정보 | 2 | `subject_list`, `subject_detail_list`, `subject_text_list`, `subject_school_map`, `subject_chart_list`, `subject_feature_list` | 예 | 예 | `sync-subject-list`, `sync-subject-detail` 구현 완료, 서버 정기 cron 반영 |
 | 적성/진로심리검사 API | 5 | 미정 | 아니오 | 아니오 | DB 적재형이 아니라 실시간 연동형일 가능성 높음 |
 
 ## 스펙별 상태
@@ -44,7 +44,7 @@
 
 ## 메모
 
-- `career/update_career.py` 기준 구현 대상은 현재 **코드 + 직업 목록 + 직업 상세 + 학교 목록 + 학과 목록**까지다.
-- 서버 cron 실등록은 현재 코드/직업 계열 위주이며, 학교/학과는 **명령 구현 및 1회 실적재 검증 완료 후 정기 편성 대기 상태**로 본다.
+- `career/update_career.py` 기준 구현 대상은 현재 **코드 + 직업 목록 + 직업 상세 + 학교 목록 + 학과 목록 + 학과 상세**까지다.
+- 서버 cron 실등록은 현재 코드/직업/학교/학과/학과상세까지 반영된 상태다.
 - 적성검사 API는 별도 존재하지만, 현재는 **DB 구축 전 스펙 문서화 단계**다.
 - `career/DB_SCHEMA.md`에는 장래 확장 테이블(`edu_chart`, `major_chart`, `rel_sol_list` 등)도 있으나, 현재 통합 수집기 기준으로는 이 문서에서 제외했다.

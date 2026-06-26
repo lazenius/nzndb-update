@@ -1248,10 +1248,11 @@ def sync_regional_indicators(cur, endpoints):
                 log(f'{endpoint["path"]} {school_div_cd} {len(items)}건 반영')
 
 
-def sync_startup_support(cur, endpoints, scope):
+def sync_startup_support(cur, endpoints, scope, school_offset=0, school_limit=None):
     schools = load_schools(cur, scope=scope)
     if not schools:
         raise RuntimeError('school_list가 비어 있습니다. 먼저 sync-school-master 실행 필요')
+    schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
 
     for endpoint in endpoints:
         for school in schools:
@@ -1315,7 +1316,13 @@ def run_job(args):
             elif args.job == 'sync-regional-indicators':
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
             elif args.job == 'sync-startup-support':
-                sync_startup_support(cur, [e for e in endpoints if classify(e) == 'startup'], args.scope)
+                sync_startup_support(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'startup'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
             elif args.job == 'sync-all':
                 sync_metadata(cur, [e for e in endpoints if classify(e) == 'metadata'], args.scope)
                 sync_school_master(cur, [e for e in endpoints if classify(e) == 'school_master'], args.scope)
@@ -1334,7 +1341,13 @@ def run_job(args):
                     school_limit=args.school_limit,
                 )
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
-                sync_startup_support(cur, [e for e in endpoints if classify(e) == 'startup'], args.scope)
+                sync_startup_support(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'startup'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
             else:
                 raise ValueError(f'알 수 없는 작업: {args.job}')
         con.commit()
@@ -1368,13 +1381,13 @@ def build_parser():
         '--school-offset',
         type=int,
         default=0,
-        help='학교 배치 시작 위치 (sync-subject-master, sync-school-indicators용)',
+        help='학교 배치 시작 위치 (sync-subject-master, sync-school-indicators, sync-startup-support용)',
     )
     parser.add_argument(
         '--school-limit',
         type=int,
         default=None,
-        help='학교 배치 크기 (sync-subject-master, sync-school-indicators용)',
+        help='학교 배치 크기 (sync-subject-master, sync-school-indicators, sync-startup-support용)',
     )
     return parser
 
