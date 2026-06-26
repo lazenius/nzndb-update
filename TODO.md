@@ -27,6 +27,7 @@
 - [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
 ## 완료
+- [x] 2026-06-27 omx team으로 academyinfo 429/cron/monitoring 후속 진행
 - [x] 2026-06-26 omx team으로 update 프로젝트 병렬 정리 실행
 - [x] 2026-06-26 career school_list / subject_list 수집 명령 추가 및 서버 실적재 검증
 - [x] 2026-06-26 academyinfo school_indicator 수집에 중간 commit / 429 retry 반영
