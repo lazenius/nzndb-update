@@ -23,6 +23,7 @@ CODE_TYPE_MAP = {
     '/getCodeByLargeSeries': 'large_series',
     '/getCodeByMiddleSeries': 'middle_series',
     '/getCodeBySmallSeries': 'small_series',
+    '/getCodeBySeriesSystem': 'series_system',
     '/getCodeByPrincipalSchoolBranchSchool': 'principal_branch',
     '/getCodeByLessonTerm': 'lesson_term',
     '/getCodeByDegreeCourse': 'degree_course',

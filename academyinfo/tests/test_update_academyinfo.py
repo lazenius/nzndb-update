@@ -16,6 +16,18 @@ def load_module():
 
 
 class UpdateAcademyinfoTest(unittest.TestCase):
+    def test_classify_series_system_as_metadata(self):
+        module = load_module()
+
+        endpoint = {
+            'path': '/getCodeBySeriesSystem',
+            'host': 'https://www.career.go.kr',
+            'required_params': ['svyYr'],
+            'optional_params': [],
+        }
+
+        self.assertEqual('metadata', module.classify(endpoint))
+
     def test_build_parser_accepts_school_batch_options(self):
         module = load_module()
 

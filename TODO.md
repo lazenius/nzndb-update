@@ -2,16 +2,16 @@
 > **마지막 세션:** 2026-06-27 | 커밋 `(현재 HEAD)`
 >
 > **완료한 작업:**
-> - career 학과 상세 수집기 및 서버 cron 추가
-> - academyinfo startup-support 학교 배치 실행 지원 추가
-> - 서버 수동 스모크 검증 및 문서 반영
+> - academyinfo `getCodeBySeriesSystem` 분류 버그 수정
+> - academyinfo school_indicator 분류/테스트 서버 반영
+> - academyinfo school_indicator 1학교 수동 실행 재검증
 >
 > **남은 작업:**
 > - 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 > - [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 cron 배치 재설계
 > - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
 >
-> **다음에 시작할 곳:** career sync-subject-detail 월배치와 academyinfo 4분할/배치 로그의 첫 정기실행 결과 검증
+> **다음에 시작할 곳:** academyinfo school_indicator 배치 실행 시간 측정 후 cron 크기 재조정 검토
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
@@ -19,6 +19,7 @@
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 - [ ] [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 cron 배치 재설계
 - [ ] (나중에) academyinfo school_indicator 4분할 cron 첫 실실행 후 a~d 로그/누락 건수 검증
+- [ ] (나중에) academyinfo school_indicator 1/3학교 배치 실행 시간 측정 및 cron batch 크기 재조정 검토
 - [ ] (나중에) career sync-subject-detail 월배치 첫 실실행 후 로그/적재 건수 검증
 
 - [x] 2026-06-26 career 적성검사 API 사용자용 웹 연동 설계 문서 작성
@@ -29,6 +30,7 @@
 - [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
 ## 완료
+- [x] 2026-06-27 [버그] academyinfo sync-school-indicators 가 3개 학교 배치도 장시간 실행되는 원인 분석
 - [x] 2026-06-27 career, academyinfo 데이터 수집 프로그램 계속 개발 및 cron 등록
 - [x] 2026-06-27 omx team으로 academyinfo 429/cron/monitoring 후속 진행
 - [x] 2026-06-26 omx team으로 update 프로젝트 병렬 정리 실행
