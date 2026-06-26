@@ -951,6 +951,18 @@ def load_schools(cur, scope='latest'):
     return cur.fetchall()
 
 
+def slice_schools(schools, school_offset=0, school_limit=None):
+    if school_offset < 0:
+        raise ValueError('school_offset는 0 이상이어야 합니다')
+    if school_limit is not None and school_limit < 1:
+        raise ValueError('school_limit는 1 이상이어야 합니다')
+
+    schools = schools[school_offset:]
+    if school_limit is not None:
+        schools = schools[:school_limit]
+    return schools
+
+
 def load_indicator_codes(cur):
     cur.execute(
         f"""
@@ -1142,10 +1154,11 @@ def sync_school_master(cur, endpoints, scope):
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
-def sync_subject_master(cur, endpoints, scope):
+def sync_subject_master(cur, endpoints, scope, school_offset=0, school_limit=None):
     schools = load_schools(cur, scope=scope)
     if not schools:
         raise RuntimeError('school_list가 비어 있습니다. 먼저 sync-school-master 실행 필요')
+    schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
 
     for endpoint in endpoints:
         for school in schools:
@@ -1266,7 +1279,13 @@ def run_job(args):
             elif args.job == 'sync-school-master':
                 sync_school_master(cur, [e for e in endpoints if classify(e) == 'school_master'], args.scope)
             elif args.job == 'sync-subject-master':
-                sync_subject_master(cur, [e for e in endpoints if classify(e) == 'subject_master'], args.scope)
+                sync_subject_master(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'subject_master'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
             elif args.job == 'sync-school-indicators':
                 sync_school_indicators(cur, [e for e in endpoints if classify(e) == 'school_indicator'], args.scope)
             elif args.job == 'sync-regional-indicators':
@@ -1276,7 +1295,13 @@ def run_job(args):
             elif args.job == 'sync-all':
                 sync_metadata(cur, [e for e in endpoints if classify(e) == 'metadata'], args.scope)
                 sync_school_master(cur, [e for e in endpoints if classify(e) == 'school_master'], args.scope)
-                sync_subject_master(cur, [e for e in endpoints if classify(e) == 'subject_master'], args.scope)
+                sync_subject_master(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'subject_master'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
                 sync_school_indicators(cur, [e for e in endpoints if classify(e) == 'school_indicator'], args.scope)
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
                 sync_startup_support(cur, [e for e in endpoints if classify(e) == 'startup'], args.scope)
@@ -1308,6 +1333,18 @@ def build_parser():
         choices=['latest', 'all'],
         default='latest',
         help='년도 범위',
+    )
+    parser.add_argument(
+        '--school-offset',
+        type=int,
+        default=0,
+        help='학교 배치 시작 위치 (sync-subject-master용)',
+    )
+    parser.add_argument(
+        '--school-limit',
+        type=int,
+        default=None,
+        help='학교 배치 크기 (sync-subject-master용)',
     )
     return parser
 
