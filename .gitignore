@@ -2,3 +2,10 @@
 .DS_Store
 __pycache__/
 *.pyc
+academyinfo/include/common_local.py
+career/include/common_local.py
+career/include/common.py
+academyinfo/logs/
+academyinfo/raw/
+career/logs/
+career/raw/

@@ -13,6 +13,9 @@
 - 현재는 `academyinfo`, `career` 기준 문서와 일부 수집기 스크립트가 함께 관리된다.
 - Git 저장소는 초기화되었지만, **로컬 작업본은 GitHub 원격을 연결하지 않는다.**
 - 서버 `/var/www/html/update` 는 Git 저장소 및 GitHub `lazenius/nzndb-update` 원격과 연결되어 있다.
+- **실제 프로그램 개발·실행·테스트·cron 검증은 서버 `/var/www/html/update` 기준으로 진행한다.**
+- 로컬 `/Users/nazuni/_lab/web/html/update` 는 문서·구조·기준 스냅샷 관리용으로 유지한다.
+- 런타임 산출물(`logs/`, `raw/`)과 비밀 설정(`common_local.py`)은 Git 추적 대상에서 제외한다.
 
 ## 책임 범위
 

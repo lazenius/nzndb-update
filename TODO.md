@@ -6,9 +6,9 @@
 
 - [ ] academyinfo sync-subject-master 장기 실행 원인 확인 및 필요시 중단
 
-- [ ] academyinfo sync-subject-master 원인 분석 및 배치 단위 실행 수정
-
 ## 완료
+- [x] 2026-06-26 academyinfo sync-subject-master 원인 분석 및 배치 단위 실행 수정
+- [x] 2026-06-26 서버 개발/테스트 기준으로 파일 구조 및 문서 정리
 - [x] 2026-06-26 .omx ignore 처리 및 변경 요약 문서화
 - [x] 2026-06-26 AGENTS.md 최신 상태 반영 및 로컬 커밋
 - [x] 2026-06-26 academyinfo 문서 구조 정리 및 최신 운영 상태 반영

@@ -1,8 +1,10 @@
 import importlib.util
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from xml.etree import ElementTree
 
@@ -153,8 +155,23 @@ def build_url(service_host, endpoint_path, params):
 def fetch_xml(service_host, endpoint_path, params):
     ensure_config_loaded()
     url = build_url(service_host, endpoint_path, params)
-    with urlopen(url, timeout=120) as response:
-        return url, response.read()
+    delays = [0, 2, 5]
+
+    for attempt, delay in enumerate(delays, start=1):
+        if delay > 0:
+            time.sleep(delay)
+
+        try:
+            with urlopen(url, timeout=120) as response:
+                return url, response.read()
+        except HTTPError as exc:
+            if exc.code not in (502, 503, 504) or attempt == len(delays):
+                raise
+            log(f'재시도 예정: HTTP {exc.code} {endpoint_path} attempt={attempt}')
+        except URLError as exc:
+            if attempt == len(delays):
+                raise
+            log(f'재시도 예정: URL 오류 {endpoint_path} attempt={attempt} error={exc.reason}')
 
 
 def save_raw(job_name, endpoint_name, page_no, xml_bytes):
