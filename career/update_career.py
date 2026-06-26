@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -258,6 +259,43 @@ CREATE_STATEMENTS = [
         PRIMARY KEY (school, seq, feature_group, feature_type, item_seq)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.aptitude_test_list (
+        version varchar(10) NOT NULL,
+        qno int unsigned NOT NULL,
+        name varchar(100) NOT NULL,
+        target varchar(50) NOT NULL,
+        summary text NOT NULL,
+        question_count smallint unsigned NOT NULL default 0,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (version, qno)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.aptitude_question_list (
+        version varchar(10) NOT NULL,
+        qno int unsigned NOT NULL,
+        question_no int unsigned NOT NULL,
+        title varchar(300) NOT NULL,
+        question_text text NOT NULL,
+        choice_limit smallint unsigned NOT NULL default 0,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (version, qno, question_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.aptitude_choice_list (
+        version varchar(10) NOT NULL,
+        qno int unsigned NOT NULL,
+        question_no int unsigned NOT NULL,
+        choice_no smallint unsigned NOT NULL,
+        choice_value varchar(50) NOT NULL,
+        choice_text varchar(300) NOT NULL,
+        choice_type varchar(10) NOT NULL,
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (version, qno, question_no, choice_no)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
 ]
 
 
@@ -282,6 +320,10 @@ SUBJECT_GUBUNS = [
     ('high_list', 'high'),
     ('univ_list', 'univ'),
 ]
+
+
+APTITUDE_V2_TESTS_PATH = '/inspct/openapi/v2/tests'
+APTITUDE_V2_TEST_PATH = '/inspct/openapi/v2/test'
 
 
 REGION_CODE_BY_NAME = {
@@ -496,6 +538,43 @@ def xml_contents(node, name):
     if child is None:
         return []
     return child.findall('content')
+
+
+def build_aptitude_url(path, params=None):
+    common.ensure_config_loaded()
+    query = {'apikey': common.API_KEY}
+    if params:
+        query.update(params)
+    return f'{common.BASE_API_URL}{path}?{urlencode(query)}'
+
+
+def fetch_aptitude_json(path, params=None):
+    url = build_aptitude_url(path, params)
+    payload = json.loads(common.fetch_json_url(url).decode('utf-8'))
+    return url, payload
+
+
+def aptitude_result_list(payload):
+    payload = ensure_dict(payload)
+    result = payload.get('result')
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        return [result]
+    result = payload.get('RESULT')
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        return [result]
+    return []
+
+
+def aptitude_result_dict(payload):
+    rows = aptitude_result_list(payload)
+    if rows:
+        return ensure_dict(rows[0])
+    payload = ensure_dict(payload)
+    return ensure_dict(payload.get('result') or payload.get('RESULT'))
 
 
 def upsert_code_rows(rows):
@@ -850,6 +929,122 @@ def sync_subject_detail(school='', seq=0, limit=0):
         conn.close()
 
 
+def upsert_aptitude_test(cur, version, row, question_count):
+    qno = int_or_zero(first_text(row.get('qno'), row.get('qestnrSeq')))
+    if qno == 0:
+        return 0
+    cur.execute(
+        f"""
+        INSERT INTO {common.DB_NAME}.aptitude_test_list (
+            version, qno, name, target, summary, question_count, recv_time
+        ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+            name=VALUES(name),
+            target=VALUES(target),
+            summary=VALUES(summary),
+            question_count=VALUES(question_count),
+            recv_time=VALUES(recv_time)
+        """,
+        (
+            version,
+            qno,
+            first_text(row.get('name'), row.get('qnm'))[:100],
+            first_text(row.get('target'), row.get('grade'), row.get('school'))[:50],
+            first_text(row.get('summary'), row.get('info'), row.get('description')),
+            question_count,
+        ),
+    )
+    return qno
+
+
+def replace_aptitude_questions(cur, version, qno, questions):
+    cur.execute(
+        f'DELETE FROM {common.DB_NAME}.aptitude_question_list WHERE version = %s AND qno = %s',
+        (version, qno),
+    )
+    cur.execute(
+        f'DELETE FROM {common.DB_NAME}.aptitude_choice_list WHERE version = %s AND qno = %s',
+        (version, qno),
+    )
+    for question in questions:
+        question_no = int_or_zero(first_text(question.get('no'), question.get('questionNo')))
+        if question_no == 0:
+            continue
+        cur.execute(
+            f"""
+            INSERT INTO {common.DB_NAME}.aptitude_question_list (
+                version, qno, question_no, title, question_text, choice_limit, recv_time
+            ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (
+                version,
+                qno,
+                question_no,
+                first_text(question.get('title'))[:300],
+                first_text(question.get('text'), question.get('question')),
+                int_or_zero(first_text(question.get('limit'), question.get('choiceLimit'))),
+            ),
+        )
+        for idx, choice in enumerate(ensure_list(question.get('choices')), start=1):
+            choice = ensure_dict(choice)
+            cur.execute(
+                f"""
+                INSERT INTO {common.DB_NAME}.aptitude_choice_list (
+                    version, qno, question_no, choice_no, choice_value, choice_text, choice_type, recv_time
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                """,
+                (
+                    version,
+                    qno,
+                    question_no,
+                    idx,
+                    first_text(choice.get('val'), choice.get('value'))[:50],
+                    first_text(choice.get('text'), choice.get('label'))[:300],
+                    first_text(choice.get('type'))[:10],
+                ),
+            )
+
+
+def fetch_aptitude_v2_tests():
+    return fetch_aptitude_json(APTITUDE_V2_TESTS_PATH)
+
+
+def fetch_aptitude_v2_test(qno):
+    return fetch_aptitude_json(APTITUDE_V2_TEST_PATH, {'q': qno})
+
+
+def sync_aptitude_meta():
+    ensure_tables()
+    conn = connect_db(common.DB_NAME)
+    try:
+        with conn.cursor() as cur:
+            url, payload = fetch_aptitude_v2_tests()
+            save_raw('sync_aptitude_meta', 'v2-tests.json', payload)
+            tests = aptitude_result_list(payload)
+            total = 0
+            for row in tests:
+                qno = int_or_zero(first_text(row.get('qno')))
+                if qno == 0:
+                    continue
+                detail_url, detail_payload = fetch_aptitude_v2_test(qno)
+                save_raw('sync_aptitude_meta', f'v2-test-{qno}.json', detail_payload)
+                detail = aptitude_result_dict(detail_payload)
+                questions = ensure_list(detail.get('questions'))
+                upsert_aptitude_test(cur, 'v2', {
+                    'qno': qno,
+                    'name': first_text(detail.get('qnm'), row.get('name')),
+                    'target': first_text(row.get('target'), row.get('grade')),
+                    'summary': first_text(detail.get('summary')),
+                }, len(questions))
+                replace_aptitude_questions(cur, 'v2', qno, questions)
+                total += 1
+                log(f'aptitude v2 {qno}: 문항 {len(questions)}건 동기화 ({common.safe_url(detail_url)})')
+        conn.commit()
+    finally:
+        conn.close()
+    log(f'aptitude meta 동기화 완료: 총 {total}건 ({common.safe_url(url)})')
+
+
 def sync_code_list():
     ensure_tables()
     total = 0
@@ -1196,6 +1391,7 @@ def build_parser():
     sub.add_parser('sync-code-list')
     sub.add_parser('sync-school-list')
     sub.add_parser('sync-subject-list')
+    sub.add_parser('sync-aptitude-meta')
 
     subject_detail_parser = sub.add_parser('sync-subject-detail')
     subject_detail_parser.add_argument('--school', default='')
@@ -1237,6 +1433,9 @@ def main():
         return
     if args.command == 'sync-subject-list':
         sync_subject_list()
+        return
+    if args.command == 'sync-aptitude-meta':
+        sync_aptitude_meta()
         return
     if args.command == 'sync-subject-detail':
         sync_subject_detail(school=args.school, seq=args.seq, limit=args.limit)

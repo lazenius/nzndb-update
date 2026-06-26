@@ -111,6 +111,13 @@
 
 - 학과 상세 API
 
+### 배치 G — 매월 5일 02:30
+
+적성검사 메타 캐시 동기화
+
+- v2 검사 목록 API
+- v2 검사 문항 API
+
 ## 현재 서버 cron
 
 ```cron
@@ -123,6 +130,7 @@
 0 3 * * 1 cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-school-list >> logs/sync_school_list.log 2>&1
 30 3 * * 1 cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-subject-list >> logs/sync_subject_list.log 2>&1
 30 2 4 * * cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-subject-detail >> logs/sync_subject_detail.log 2>&1
+30 2 5 * * cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-aptitude-meta >> logs/sync_aptitude_meta.log 2>&1
 ```
 
 ## 구현 순서 권장
@@ -134,6 +142,7 @@
 5. `school_list`, `subject_list` 수집기 구현 및 1회 실적재 검증
 6. 서버 확장 배치 cron 실등록
 7. 학과 상세 적재기 구현 및 서버 월배치 검증
+8. 적성검사 메타 캐시 수집기 구현 및 월배치 검증
 
 ## 검증 포인트
 
@@ -142,6 +151,7 @@
 - `edu_chart`, `major_chart`, `indicator_chart`는 현재 PK가 단순해 실응답 기준 재검토가 필요하다.
 - 학교/학과 목록 명령은 구현 및 정기 cron 편성까지 반영됐다.
 - 학과 상세 명령은 구현 및 정기 cron 편성까지 반영됐고, 서버 수동 스모크 검증이 추가로 필요하다.
+- 적성검사 메타 캐시 명령은 v2 검사 목록/문항 기준으로 월배치 편성 대상이다.
 - `sync-all`은 이제 학교/학과 목록과 학과 상세까지 함께 수행하지만, 운영 cron은 여전히 개별 로그 분리를 위해 별도 명령 기준을 유지한다.
 
 ## 현재 반영 상태
@@ -157,6 +167,9 @@
   - `sync-subject-list`
 - 학과 상세 명령 구현 완료
   - `sync-subject-detail`
+- 적성검사 메타 캐시 명령 구현 완료
+  - `sync-aptitude-meta`
 - 남은 과제
   - subject-detail 서버 1회 수동 실행 검증
+  - aptitude meta 서버 1회 수동 실행 검증
   - school/subject 주기별 적재 건수/로그 검증

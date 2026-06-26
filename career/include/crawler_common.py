@@ -182,10 +182,12 @@ def save_raw(job_name, file_name, payload):
 
 
 def safe_url(url):
-    if 'apiKey=' not in url:
-        return url
-    head, tail = url.split('apiKey=', 1)
-    if '&' in tail:
-        _, rest = tail.split('&', 1)
-        return f'{head}apiKey=***&{rest}'
-    return f'{head}apiKey=***'
+    for key_name in ('apiKey=', 'apikey='):
+        if key_name not in url:
+            continue
+        head, tail = url.split(key_name, 1)
+        if '&' in tail:
+            _, rest = tail.split('&', 1)
+            return f'{head}{key_name}***&{rest}'
+        return f'{head}{key_name}***'
+    return url

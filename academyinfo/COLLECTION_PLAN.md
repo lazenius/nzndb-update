@@ -88,10 +88,7 @@
 - `/var/www/html/update/academyinfo/logs/sync_code_year.log`
 - `/var/www/html/update/academyinfo/logs/sync_school_master.log`
 - `/var/www/html/update/academyinfo/logs/sync_subject_master.log`
-- `/var/www/html/update/academyinfo/logs/sync_school_indicator_a.log`
-- `/var/www/html/update/academyinfo/logs/sync_school_indicator_b.log`
-- `/var/www/html/update/academyinfo/logs/sync_school_indicator_c.log`
-- `/var/www/html/update/academyinfo/logs/sync_school_indicator_d.log`
+- `/var/www/html/update/academyinfo/logs/sync_school_indicator_batch.log`
 - `/var/www/html/update/academyinfo/logs/sync_regional_indicator.log`
 - `/var/www/html/update/academyinfo/logs/sync_startup_support.log`
 
@@ -101,10 +98,7 @@
 10 2 1 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-code-year --scope latest >> logs/sync_code_year.log 2>&1
 20 2 * * 1 cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-master --scope latest >> logs/sync_school_master.log 2>&1
 40 2 * * 1 cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-subject-master --scope latest >> logs/sync_subject_master.log 2>&1
-10 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 0 --school-limit 100 >> logs/sync_school_indicator_a.log 2>&1
-40 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 100 --school-limit 100 >> logs/sync_school_indicator_b.log 2>&1
-10 4 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 200 --school-limit 100 >> logs/sync_school_indicator_c.log 2>&1
-40 4 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 300 --school-limit 100 >> logs/sync_school_indicator_d.log 2>&1
+10,40 2-22 3 * * cd /var/www/html/update/academyinfo && batch_index=$(( (10#$(date +\%H) - 2) * 2 + (10#$(date +\%M) / 30) )) && school_offset=$(( batch_index * 9 )) && echo "[batch] offset=${school_offset} limit=9" >> logs/sync_school_indicator_batch.log && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset ${school_offset} --school-limit 9 >> logs/sync_school_indicator_batch.log 2>&1
 10 4 4 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-regional-indicators --scope latest >> logs/sync_regional_indicator.log 2>&1
 10 5 5 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-startup-support --scope latest >> logs/sync_startup_support.log 2>&1
 ```
@@ -118,6 +112,7 @@
   - `sync-code-year --scope latest`
   - `sync-school-master --scope latest` → 2026 빈 응답 확인 후 2025 fallback 동작 반영
   - `sync-school-indicators --scope latest --school-offset 0 --school-limit 1` → 2026-06-27 스모크 통과
+  - `sync-school-indicators --scope latest --school-offset 0 --school-limit 3` → 2026-06-27 실측 `5:51.63`
 
 ## `HTTP 429` 운영 안정화안
 
@@ -134,23 +129,21 @@
 1. `sync-school-indicators` 를 단일 월배치 1회 대신 **학교 범위 분할 cron** 으로 운영한다.
 2. 실패 시 전체 재실행보다 **마지막 미완료 offset부터 재실행**한다.
 3. `sync-regional-indicators` 와 `sync-startup-support` 는 다른 날/시간대로 유지해 동시 호출량을 줄인다.
-4. `collector_runs.html` 에서는 `sync_school_indicator_[a-d].log` 의 마지막 성공 offset/실패 시각을 바로 보이게 한다.
-5. 2026-06-27 서버 최신 `school_list` 기준 학교 수는 `377`건이므로, 운영 배치는 `100`건 단위 4분할을 기본값으로 둔다.
+4. `collector_runs.html` 에서는 `sync_school_indicator_batch.log` 의 마지막 성공 offset/실패 시각을 바로 보이게 한다.
+5. 2026-06-27 실측 기준 `school-limit 1 = 1:44.68`, `school-limit 3 = 5:51.63` 이므로 `100`건 단위 4분할은 폐기한다.
+6. 2026-06-27 서버 최신 `school_list` 기준 학교 수는 `377`건이므로, 운영 배치는 `9`건 단위 `42`회 월간 롤링 배치로 전환한다.
 
-### 분할 cron 예시
+### 롤링 cron 예시
 
 ```cron
-10 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 0 --school-limit 100 >> logs/sync_school_indicator_a.log 2>&1
-40 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 100 --school-limit 100 >> logs/sync_school_indicator_b.log 2>&1
-10 4 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 200 --school-limit 100 >> logs/sync_school_indicator_c.log 2>&1
-40 4 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 300 --school-limit 100 >> logs/sync_school_indicator_d.log 2>&1
+10,40 2-22 3 * * cd /var/www/html/update/academyinfo && batch_index=$(( (10#$(date +\%H) - 2) * 2 + (10#$(date +\%M) / 30) )) && school_offset=$(( batch_index * 9 )) && echo "[batch] offset=${school_offset} limit=9" >> logs/sync_school_indicator_batch.log && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset ${school_offset} --school-limit 9 >> logs/sync_school_indicator_batch.log 2>&1
 ```
 
 ### 검증 포인트
 
-- 분할 실행 후 `school_indicator_list` 건수가 배치 간 누락 없이 누적되는지 확인
+- 롤링 실행 후 `school_indicator_list` 건수가 배치 간 누락 없이 누적되는지 확인
 - `429` 발생 시 로그에 **어느 endpoint / 어느 school offset 범위**에서 멈췄는지 남는지 확인
-- 다음 달 실행에서도 같은 offset 크기가 유지 가능한지 확인
+- 다음 달 실행에서도 같은 offset 크기(`9`)가 유지 가능한지 확인
 - `sync-startup-support` 도 동일 문제가 반복되면 학교 배치 옵션 추가를 후속 과제로 승격
 
 ## 구현 한계

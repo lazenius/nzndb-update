@@ -17,7 +17,7 @@
 | 직업 목록/상세 | 2 | `job_list`, `job_work_list`, `interest_list`, `research_list`, `job_ready_list`, `forecast_list`, `perform_list`, `ability_list`, `depart_list`, `tag_list`, `job_rel_org_list` | 예 | 예 | `sync-job-list`, `sync-job-detail` 운영 |
 | 학교 정보 | 6 | `school_list` | 예 | 예 | `sync-school-list` 구현 완료, 서버 정기 cron 편성은 후속 |
 | 학과 정보 | 2 | `subject_list`, `subject_detail_list`, `subject_text_list`, `subject_school_map`, `subject_chart_list`, `subject_feature_list` | 예 | 예 | `sync-subject-list`, `sync-subject-detail` 구현 완료, 서버 정기 cron 반영 |
-| 적성/진로심리검사 API | 5 | 미정 | 아니오 | 아니오 | DB 적재형이 아니라 실시간 연동형일 가능성 높음 |
+| 적성/진로심리검사 API | 5 | `aptitude_test_list`, `aptitude_question_list`, `aptitude_choice_list` | 부분 | 부분 | v2 검사 목록/문항 메타 캐시만 수집 |
 
 ## 스펙별 상태
 
@@ -36,15 +36,15 @@
 | 학교 정보 | `alte_list` | `school_list` | 예 | 예 | `career/update_career.py` `sync-school-list` |
 | 학과 정보 | `high_list` | `subject_list` | 예 | 예 | `career/update_career.py` `sync-subject-list` |
 | 학과 정보 | `univ_list` | `subject_list` | 예 | 예 | `career/update_career.py` `sync-subject-list` |
-| 적성/진로심리검사 API(v1) | `GET /inspct/openapi/test/questions` | 미정 | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고 |
-| 적성/진로심리검사 API(v1) | `POST /inspct/openapi/test/report` | 미정 | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고 |
-| 적성/진로심리검사 API(v2) | `GET /inspct/openapi/v2/tests` | 미정 | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고 |
-| 적성/진로심리검사 API(v2) | `GET /inspct/openapi/v2/test` | 미정 | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고 |
-| 적성/진로심리검사 API(v2) | `POST /inspct/openapi/v2/report` | 미정 | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고 |
+| 적성/진로심리검사 API(v1) | `GET /inspct/openapi/test/questions` | `aptitude_question_list`, `aptitude_choice_list` | 아니오 | 아니오 | `career/APTITUDE_API_SPEC.md` 참고, qno 목록 미확정 |
+| 적성/진로심리검사 API(v1) | `POST /inspct/openapi/test/report` | 미정 | 아니오 | 아니오 | 사용자 입력 기반, cron 대상 아님 |
+| 적성/진로심리검사 API(v2) | `GET /inspct/openapi/v2/tests` | `aptitude_test_list` | 부분 | 예 | `career/update_career.py` `sync-aptitude-meta` |
+| 적성/진로심리검사 API(v2) | `GET /inspct/openapi/v2/test` | `aptitude_question_list`, `aptitude_choice_list` | 부분 | 예 | `career/update_career.py` `sync-aptitude-meta` |
+| 적성/진로심리검사 API(v2) | `POST /inspct/openapi/v2/report` | 미정 | 아니오 | 아니오 | 사용자 입력 기반, cron 대상 아님 |
 
 ## 메모
 
 - `career/update_career.py` 기준 구현 대상은 현재 **코드 + 직업 목록 + 직업 상세 + 학교 목록 + 학과 목록 + 학과 상세**까지다.
 - 서버 cron 실등록은 현재 코드/직업/학교/학과/학과상세까지 반영된 상태다.
-- 적성검사 API는 별도 존재하지만, 현재는 **DB 구축 전 스펙 문서화 단계**다.
+- 적성검사 API는 여전히 **실시간 연동형 중심**이지만, v2 목록/문항 메타는 캐시 수집 대상으로 추가됐다.
 - `career/DB_SCHEMA.md`에는 장래 확장 테이블(`edu_chart`, `major_chart`, `rel_sol_list` 등)도 있으나, 현재 통합 수집기 기준으로는 이 문서에서 제외했다.
