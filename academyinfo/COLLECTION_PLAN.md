@@ -112,6 +112,38 @@
   - `sync-code-year --scope latest`
   - `sync-school-master --scope latest` → 2026 빈 응답 확인 후 2025 fallback 동작 반영
 
+## `HTTP 429` 운영 안정화안
+
+### 현재 코드 기준
+
+- 공통 호출부 `academyinfo/include/common.py` 는 `429/502/503/504`에 대해 `0 → 2 → 5 → 15 → 30초` 재시도를 수행한다.
+- `sync-school-indicators` 는 재시도 후에도 `429`가 나면 **현재 배치까지 commit 후 중단**한다.
+- `sync-regional-indicators` 는 공통 재시도만 있고, `sync-school-indicators` 같은 중간 commit/중단 처리 분기는 없다.
+- `sync-subject-master`, `sync-school-indicators` 는 `--school-offset`, `--school-limit` 배치 실행이 가능하다.
+- `sync-startup-support` 는 아직 학교 배치 옵션이 없어, 필요 시 코드 보강 전까지는 단일 실행/수동 재실행 기준으로 운영해야 한다.
+
+### 운영 권장안
+
+1. `sync-school-indicators` 를 단일 월배치 1회 대신 **학교 범위 분할 cron** 으로 운영한다.
+2. 실패 시 전체 재실행보다 **마지막 미완료 offset부터 재실행**한다.
+3. `sync-regional-indicators` 와 `sync-startup-support` 는 다른 날/시간대로 유지해 동시 호출량을 줄인다.
+4. `collector_runs.html` 에서는 `sync_school_indicator.log` 의 마지막 성공 offset/실패 시각을 바로 보이게 한다.
+
+### 분할 cron 예시
+
+```cron
+10 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 0 --school-limit 120 >> logs/sync_school_indicator_a.log 2>&1
+40 3 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 120 --school-limit 120 >> logs/sync_school_indicator_b.log 2>&1
+10 4 3 * * cd /var/www/html/update/academyinfo && /usr/bin/python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 240 --school-limit 120 >> logs/sync_school_indicator_c.log 2>&1
+```
+
+### 검증 포인트
+
+- 분할 실행 후 `school_indicator_list` 건수가 배치 간 누락 없이 누적되는지 확인
+- `429` 발생 시 로그에 **어느 endpoint / 어느 school offset 범위**에서 멈췄는지 남는지 확인
+- 다음 달 실행에서도 같은 offset 크기가 유지 가능한지 확인
+- `sync-startup-support` 도 동일 문제가 반복되면 학교 배치 옵션 추가를 후속 과제로 승격
+
 ## 구현 한계
 
 - `getCodeBySeriesSystem`은 현재 테이블 구조상 완전 정규화보다 raw 저장이 안전하다.

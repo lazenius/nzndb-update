@@ -29,19 +29,19 @@
 - 적재 대상:
   - `code_list`
 
-### 2) 주 1회 목록 동기화 — 1개 + 확장 예정 2개
+### 2) 주 1회 목록 동기화 — 3개
 
-- 현재 문서 기준 대상:
+- 대상:
   - `jobs.json`
-- 2차 확장 예정:
-  - 학교 목록 API
-  - 학과 목록 API
+  - 학교 목록 API 6종
+  - 학과 목록 API 2종
 - 이유:
   - 목록성 데이터는 신규/수정 반영 필요가 있다.
   - 하지만 일배치까지는 과하고 주간 동기화가 현실적이다.
 - 적재 대상:
   - `job_list`
-  - 확장 시 `school_list`, `subject_list`
+  - `school_list`
+  - `subject_list`
 
 ### 3) 월 1회 상세 전체 재동기화 — 1개 + 확장 예정 1개
 
@@ -87,25 +87,25 @@
 
 - `jobs.json`
 
-### 배치 C — 매월 3일 02:30
+### 배치 C — 매주 월요일 03:00
+
+학교 목록 동기화
+
+- 학교 목록 API 6종
+
+### 배치 D — 매주 월요일 03:30
+
+학과 목록 동기화
+
+- 학과 목록 API 2종
+
+### 배치 E — 매월 3일 02:30
 
 직업 상세 전체 재수집
 
 - `job.json`
 
-### 배치 D — 2차 확장 후 매주 월요일 03:00
-
-학교 목록 동기화
-
-- 학교 목록 API
-
-### 배치 E — 2차 확장 후 매주 월요일 03:30
-
-학과 목록 동기화
-
-- 학과 목록 API
-
-### 배치 F — 2차 확장 후 매월 4일 02:30
+### 배치 F — 후속 확장 시 매월 4일 02:30
 
 학과 상세 전체 재수집
 
@@ -119,9 +119,9 @@
 30 2 3 * * cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-job-detail >> logs/sync_job_detail.log 2>&1
 ```
 
-## 확장 예정 cron 초안
+## 서버 추가 cron 초안
 
-아래는 아직 실등록 전인 확장 계획이다.
+아래 명령은 코드 기준으로는 즉시 사용 가능하지만, 서버 실등록/실행 증거는 별도 확인이 필요하다.
 
 ```cron
 0 3 * * 1 cd /var/www/html/update/career && /usr/bin/python3 update_career.py sync-school-list >> logs/sync_school_list.log 2>&1
@@ -135,16 +135,17 @@
 2. `job_list` 수집기 구현
 3. `job.json` 상세 적재기 구현
 4. 학교/학과 목록 API 실응답 확보
-5. `school_list`, `subject_list` 수집기 구현
-6. 학과 상세 적재기 구현
-7. 서버 확장 배치 cron 실등록
+5. `school_list`, `subject_list` 수집기 구현 및 1회 실적재 검증
+6. 서버 확장 배치 cron 실등록
+7. 학과 상세 적재기 구현
 
 ## 검증 포인트
 
 - `jobs.json` 목록에서 상세 수집 대상 키를 안정적으로 확보할 수 있어야 한다.
 - `job.json` 반복 노드는 직업코드 기준 삭제 후 재적재 방식이 단순하다.
 - `edu_chart`, `major_chart`, `indicator_chart`는 현재 PK가 단순해 실응답 기준 재검토가 필요하다.
-- 학교/학과 API는 아직 문서 기준만 있으므로, 주기 확정 전 실응답 샘플 재검증이 필요하다.
+- 학교/학과 명령은 구현돼 있지만, 정기 cron 편성 전에는 서버 로그 기준 운영 건수 검증이 더 필요하다.
+- `sync-all`은 현재 학교/학과를 포함하지 않으므로, 운영 시 `sync-school-list`, `sync-subject-list`를 별도 cron 으로 본다는 점을 유지해야 한다.
 
 ## 현재 반영 상태
 
@@ -154,6 +155,10 @@
   - `sync-code-list`
   - `sync-job-list`
   - `sync-job-detail`
+- 학교/학과 명령 구현 및 서버 1회 실적재 검증 완료
+  - `sync-school-list`
+  - `sync-subject-list`
 - 남은 과제
-  - school/subject 계열 구현 및 cron 확장
-  - `sync-code-list` 0건 로그 원인 확인
+  - school/subject 정기 cron 확장
+  - school/subject 주기별 적재 건수/로그 검증
+  - 학과 상세 계열 구현 여부 결정

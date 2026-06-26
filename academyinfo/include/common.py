@@ -155,7 +155,7 @@ def build_url(service_host, endpoint_path, params):
 def fetch_xml(service_host, endpoint_path, params):
     ensure_config_loaded()
     url = build_url(service_host, endpoint_path, params)
-    delays = [0, 2, 5]
+    delays = [0, 2, 5, 15, 30]
 
     for attempt, delay in enumerate(delays, start=1):
         if delay > 0:
@@ -165,7 +165,7 @@ def fetch_xml(service_host, endpoint_path, params):
             with urlopen(url, timeout=120) as response:
                 return url, response.read()
         except HTTPError as exc:
-            if exc.code not in (502, 503, 504) or attempt == len(delays):
+            if exc.code not in (429, 502, 503, 504) or attempt == len(delays):
                 raise
             log(f'재시도 예정: HTTP {exc.code} {endpoint_path} attempt={attempt}')
         except URLError as exc:

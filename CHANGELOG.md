@@ -32,6 +32,10 @@
   - `.omx/`
   - `.DS_Store`
   - Python 캐시 제외
+- WIP 정리 문서 최신화
+  - `career` 학교/학과 수집 통합 상태를 현재 코드 기준으로 정정
+  - `academyinfo` `HTTP 429` 운영 안정화안 문서화
+  - `robocode-admin` 1차 모니터링 후속 정의 구체화
 
 ### 서버 반영 상태
 - 서버 `/var/www/html/update` Git 저장소 초기화

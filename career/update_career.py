@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 from pathlib import Path
+from urllib.parse import urlencode
+from urllib.request import urlopen
+import xml.etree.ElementTree as ET
 
 from include import crawler_common as common
 from include.crawler_common import connect_db, ensure_dict, ensure_list, float_or_zero, int_or_zero, log, save_raw, text
@@ -49,6 +52,36 @@ CREATE_STATEMENTS = [
         KEY apt_code_idx (apt_code),
         KEY thm_code_idx (thm_code),
         KEY cat_code_idx (cat_code)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.school_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        name varchar(50) NOT NULL default '',
+        campus varchar(50) NOT NULL default '',
+        sch1 char(6) NOT NULL default '',
+        sch2 char(6) NOT NULL default '',
+        region char(6) NOT NULL default '',
+        est char(6) NOT NULL default '',
+        address varchar(200) NOT NULL default '',
+        link varchar(300) NOT NULL default '',
+        info varchar(300) NOT NULL default '',
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq),
+        KEY name_idx (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.subject_list (
+        school char(4) NOT NULL,
+        seq int unsigned NOT NULL,
+        name varchar(30) NOT NULL default '',
+        faculty char(6) NOT NULL default '',
+        others varchar(3000) NOT NULL default '',
+        recv_time datetime NOT NULL,
+        PRIMARY KEY (school, seq),
+        KEY name_idx (name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     f"""
@@ -161,6 +194,95 @@ CODE_ENDPOINTS = [
 ]
 
 
+SCHOOL_GUBUNS = [
+    ('elem_list', 'elem'),
+    ('midd_list', 'midd'),
+    ('high_list', 'high'),
+    ('univ_list', 'univ'),
+    ('seet_list', 'seet'),
+    ('alte_list', 'alte'),
+]
+
+
+SUBJECT_GUBUNS = [
+    ('high_list', 'high'),
+    ('univ_list', 'univ'),
+]
+
+
+REGION_CODE_BY_NAME = {
+    '서울특별시': '100260',
+    '부산광역시': '100267',
+    '인천광역시': '100269',
+    '대전광역시': '100271',
+    '대구광역시': '100272',
+    '울산광역시': '100273',
+    '광주광역시': '100275',
+    '경기도': '100276',
+    '강원특별자치도': '100278',
+    '충청북도': '100280',
+    '충청남도': '100281',
+    '전북특별자치도': '100282',
+    '전라남도': '100283',
+    '경상북도': '100285',
+    '경상남도': '100291',
+    '제주도': '100292',
+}
+
+
+SCHOOL_GUBUN1_CODE_BY_NAME = {
+    '일반고': '100362',
+    '특성화고': '100363',
+    '특수목적고': '100364',
+    '자율고': '100365',
+    '기타': '100366',
+    '전문대학': '100322',
+    '대학(4년제)': '100323',
+}
+
+
+SCHOOL_GUBUN2_CODE_BY_NAME = {
+    '일반고': '104228',
+    '대안교육': '100368',
+    '직업교육': '100369',
+    '기타': '100370',
+    '과학계열': '100371',
+    '외국어국제계열': '100372',
+    '예술체육계열': '100373',
+    '마이스터고': '100374',
+    '자율형사립': '100375',
+    '자율형공립': '100376',
+    '영재학교': '100377',
+    '전문대학': '100324',
+    '기능대학': '100325',
+    '사이버대학(2년제)': '100326',
+    '각종대학(전문)': '100327',
+    '일반대학': '100328',
+    '교육대학': '100329',
+    '산업대학': '100330',
+    '사이버대학(대학)': '100331',
+    '각종대학(대학)': '100332',
+}
+
+
+EST_CODE_BY_NAME = {
+    '국립': '100334',
+    '사립': '100335',
+    '공립': '100336',
+}
+
+
+FACULTY_CODE_BY_NAME = {
+    '인문계열': '100391',
+    '사회계열': '100392',
+    '교육계열': '100393',
+    '공학계열': '100394',
+    '자연계열': '100395',
+    '의약계열': '100396',
+    '예체능계열': '100397',
+}
+
+
 def first_text(*values):
     for value in values:
         value = text(value)
@@ -258,6 +380,36 @@ def print_plan():
     print(COLLECTION_PLAN_PATH.read_text(), end='')
 
 
+def build_legacy_xml_url(params):
+    common.ensure_config_loaded()
+    merged = {
+        'apiKey': common.API_KEY,
+        'svcType': 'api',
+        'contentType': 'xml',
+    }
+    merged.update(params)
+    return f'{common.BASE_API_URL}/cnet/openapi/getOpenApi?{urlencode(merged)}'
+
+
+def fetch_legacy_xml(params):
+    url = build_legacy_xml_url(params)
+    with urlopen(url, timeout=120) as response:
+        payload = response.read().decode('utf-8')
+    return url, payload
+
+
+def parse_xml_contents(payload):
+    root = ET.fromstring(payload)
+    return root.findall('.//content')
+
+
+def xml_text(node, name):
+    child = node.find(name)
+    if child is None or child.text is None:
+        return ''
+    return text(child.text)
+
+
 def upsert_code_rows(rows):
     conn = connect_db(common.DB_NAME)
     try:
@@ -280,6 +432,125 @@ def upsert_code_rows(rows):
         conn.commit()
     finally:
         conn.close()
+
+
+def upsert_school_rows(gubun, school_key, nodes):
+    conn = connect_db(common.DB_NAME)
+    try:
+        with conn.cursor() as cur:
+            for node in nodes:
+                campus = xml_text(node, 'campusName') if gubun == 'univ_list' else ''
+                info = xml_text(node, 'collegeinfourl') if gubun == 'univ_list' else ''
+                sch1 = ''
+                sch2 = ''
+                if gubun in ('univ_list', 'high_list'):
+                    sch1 = SCHOOL_GUBUN1_CODE_BY_NAME.get(xml_text(node, 'schoolGubun'), xml_text(node, 'schoolGubun'))[:6]
+                    sch2 = SCHOOL_GUBUN2_CODE_BY_NAME.get(xml_text(node, 'schoolType'), xml_text(node, 'schoolType'))[:6]
+
+                cur.execute(
+                    f"""
+                    INSERT INTO {common.DB_NAME}.school_list (
+                        school, seq, name, campus, sch1, sch2, region, est, address, link, info, recv_time
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        name=VALUES(name),
+                        campus=VALUES(campus),
+                        sch1=VALUES(sch1),
+                        sch2=VALUES(sch2),
+                        region=VALUES(region),
+                        est=VALUES(est),
+                        address=VALUES(address),
+                        link=VALUES(link),
+                        info=VALUES(info),
+                        recv_time=VALUES(recv_time)
+                    """,
+                    (
+                        school_key,
+                        int_or_zero(xml_text(node, 'seq')),
+                        xml_text(node, 'schoolName')[:50],
+                        campus[:50],
+                        sch1,
+                        sch2,
+                        REGION_CODE_BY_NAME.get(xml_text(node, 'region'), xml_text(node, 'region'))[:6],
+                        EST_CODE_BY_NAME.get(xml_text(node, 'estType'), xml_text(node, 'estType'))[:6],
+                        xml_text(node, 'adres')[:200],
+                        xml_text(node, 'link')[:300],
+                        info[:300],
+                    ),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sync_school_list():
+    ensure_tables()
+    total = 0
+    for gubun, school_key in SCHOOL_GUBUNS:
+        url, payload = fetch_legacy_xml({
+            'svcCode': 'SCHOOL',
+            'gubun': gubun,
+            'thisPage': 1,
+            'perPage': 10000,
+            'region': '',
+            'sch1': '',
+            'sch2': '',
+            'est': '',
+        })
+        save_raw('sync_school_list', f'{school_key}.xml', {'url': common.safe_url(url), 'xml': payload})
+        nodes = parse_xml_contents(payload)
+        upsert_school_rows(gubun, school_key, nodes)
+        total += len(nodes)
+        log(f'{gubun}: {len(nodes)}건 적재 ({common.safe_url(url)})')
+    log(f'school_list 동기화 완료: 총 {total}건')
+
+
+def upsert_subject_rows(school_key, nodes):
+    conn = connect_db(common.DB_NAME)
+    try:
+        with conn.cursor() as cur:
+            for node in nodes:
+                cur.execute(
+                    f"""
+                    INSERT INTO {common.DB_NAME}.subject_list (
+                        school, seq, name, faculty, others, recv_time
+                    ) VALUES (%s, %s, %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        name=VALUES(name),
+                        faculty=VALUES(faculty),
+                        others=VALUES(others),
+                        recv_time=VALUES(recv_time)
+                    """,
+                    (
+                        school_key,
+                        int_or_zero(xml_text(node, 'majorSeq')),
+                        xml_text(node, 'mClass')[:30],
+                        FACULTY_CODE_BY_NAME.get(xml_text(node, 'lClass'), xml_text(node, 'lClass'))[:6],
+                        xml_text(node, 'facilName')[:3000],
+                    ),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sync_subject_list():
+    ensure_tables()
+    total = 0
+    for gubun, school_key in SUBJECT_GUBUNS:
+        url, payload = fetch_legacy_xml({
+            'svcCode': 'MAJOR',
+            'gubun': gubun,
+            'subject': '',
+            'thisPage': 1,
+            'perPage': 1000,
+        })
+        save_raw('sync_subject_list', f'{school_key}.xml', {'url': common.safe_url(url), 'xml': payload})
+        nodes = parse_xml_contents(payload)
+        upsert_subject_rows(school_key, nodes)
+        total += len(nodes)
+        log(f'{gubun}: {len(nodes)}건 적재 ({common.safe_url(url)})')
+    log(f'subject_list 동기화 완료: 총 {total}건')
 
 
 def sync_code_list():
@@ -624,6 +895,8 @@ def build_parser():
     sub.add_parser('plan')
     sub.add_parser('init-db')
     sub.add_parser('sync-code-list')
+    sub.add_parser('sync-school-list')
+    sub.add_parser('sync-subject-list')
 
     job_list_parser = sub.add_parser('sync-job-list')
     job_list_parser.add_argument('--keyword', default='')
@@ -653,6 +926,12 @@ def main():
         return
     if args.command == 'sync-code-list':
         sync_code_list()
+        return
+    if args.command == 'sync-school-list':
+        sync_school_list()
+        return
+    if args.command == 'sync-subject-list':
+        sync_subject_list()
         return
     if args.command == 'sync-job-list':
         sync_job_list(keyword=args.keyword, max_pages=args.max_pages)

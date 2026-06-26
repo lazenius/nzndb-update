@@ -56,5 +56,68 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         ], visited)
 
 
+    def test_sync_school_indicators_commits_and_stops_on_429(self):
+        module = load_module()
+        visited = []
+        commits = []
+
+        class Http429(module.HTTPError):
+            def __init__(self):
+                super().__init__('http://example.com', 429, 'Too Many Requests', None, None)
+
+        module.load_schools = lambda cur, scope='latest': [
+            {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
+            {'schl_id': '0002', 'svy_yr': '2025', 'name': '학교2'},
+        ]
+        module.load_indicator_codes = lambda cur: []
+
+        def fake_fetch(endpoint, params, job_name):
+            visited.append(params['schlId'])
+            if params['schlId'] == '0002':
+                raise Http429()
+            return []
+
+        module.fetch_pages = fake_fetch
+        module.upsert_school_indicator = lambda cur, api_id, item, params: None
+        module.log = lambda message: None
+        module.commit_cursor = lambda cur: commits.append('commit')
+
+        module.sync_school_indicators(
+            None,
+            [{'path': '/getComparisonLibraryBudgetCrntSt', 'required_params': []}],
+            'latest',
+        )
+
+        self.assertEqual(['0001', '0002'], visited)
+        self.assertEqual(['commit', 'commit'], commits)
+
+    def test_sync_school_indicators_uses_school_batch(self):
+        module = load_module()
+        visited = []
+
+        module.load_schools = lambda cur, scope='latest': [
+            {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
+            {'schl_id': '0002', 'svy_yr': '2025', 'name': '학교2'},
+            {'schl_id': '0003', 'svy_yr': '2025', 'name': '학교3'},
+        ]
+        module.load_indicator_codes = lambda cur: []
+        module.fetch_pages = lambda endpoint, params, job_name: visited.append((endpoint['path'], params['schlId'])) or []
+        module.upsert_school_indicator = lambda cur, api_id, item, params: None
+        module.log = lambda message: None
+        module.commit_cursor = lambda cur: None
+
+        module.sync_school_indicators(
+            None,
+            [{'path': '/getComparisonLibraryBudgetCrntSt', 'required_params': []}],
+            'latest',
+            school_offset=1,
+            school_limit=1,
+        )
+
+        self.assertEqual([
+            ('/getComparisonLibraryBudgetCrntSt', '0002'),
+        ], visited)
+
+
 if __name__ == '__main__':
     unittest.main()

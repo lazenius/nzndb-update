@@ -4,6 +4,7 @@ import hashlib
 import re
 import sys
 from pathlib import Path
+from urllib.error import HTTPError
 
 from include import common
 from include.common import connect_db, fetch_xml, first_non_empty, int_or_zero, log, parse_xml_response, save_raw, text, value_or_default
@@ -999,6 +1000,14 @@ def load_school_div_codes(cur):
     return [row['code'] for row in cur.fetchall()]
 
 
+def commit_cursor(cur):
+    conn = getattr(cur, 'connection', None)
+    if conn is None:
+        conn = getattr(cur, '_connection', None)
+    if conn is not None:
+        conn.commit()
+
+
 def sync_metadata(cur, endpoints, scope):
     year_endpoints = [e for e in endpoints if is_year_endpoint(e)]
     for endpoint in year_endpoints:
@@ -1181,11 +1190,12 @@ def sync_subject_master(cur, endpoints, scope, school_offset=0, school_limit=Non
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
-def sync_school_indicators(cur, endpoints, scope):
+def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=None):
     schools = load_schools(cur, scope=scope)
     indicator_codes = load_indicator_codes(cur)
     if not schools:
         raise RuntimeError('school_list가 비어 있습니다. 먼저 sync-school-master 실행 필요')
+    schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
 
     for endpoint in endpoints:
         for school in schools:
@@ -1200,10 +1210,18 @@ def sync_school_indicators(cur, endpoints, scope):
                 param_sets = [base_params]
 
             for params in param_sets:
-                items = fetch_pages(endpoint, params, 'sync_school_indicator')
+                try:
+                    items = fetch_pages(endpoint, params, 'sync_school_indicator')
+                except HTTPError as exc:
+                    if exc.code == 429:
+                        log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - 현재 배치까지 반영 후 중단')
+                        commit_cursor(cur)
+                        return
+                    raise
                 for item in items:
                     upsert_school_indicator(cur, endpoint_name(endpoint['path']), item, params)
                 log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
+            commit_cursor(cur)
 
 
 def sync_regional_indicators(cur, endpoints):
@@ -1287,7 +1305,13 @@ def run_job(args):
                     school_limit=args.school_limit,
                 )
             elif args.job == 'sync-school-indicators':
-                sync_school_indicators(cur, [e for e in endpoints if classify(e) == 'school_indicator'], args.scope)
+                sync_school_indicators(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'school_indicator'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
             elif args.job == 'sync-regional-indicators':
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
             elif args.job == 'sync-startup-support':
@@ -1302,7 +1326,13 @@ def run_job(args):
                     school_offset=args.school_offset,
                     school_limit=args.school_limit,
                 )
-                sync_school_indicators(cur, [e for e in endpoints if classify(e) == 'school_indicator'], args.scope)
+                sync_school_indicators(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'school_indicator'],
+                    args.scope,
+                    school_offset=args.school_offset,
+                    school_limit=args.school_limit,
+                )
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
                 sync_startup_support(cur, [e for e in endpoints if classify(e) == 'startup'], args.scope)
             else:
@@ -1338,13 +1368,13 @@ def build_parser():
         '--school-offset',
         type=int,
         default=0,
-        help='학교 배치 시작 위치 (sync-subject-master용)',
+        help='학교 배치 시작 위치 (sync-subject-master, sync-school-indicators용)',
     )
     parser.add_argument(
         '--school-limit',
         type=int,
         default=None,
-        help='학교 배치 크기 (sync-subject-master용)',
+        help='학교 배치 크기 (sync-subject-master, sync-school-indicators용)',
     )
     return parser
 

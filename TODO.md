@@ -1,10 +1,38 @@
-
+<!-- 다음 세션 시작 메모 — 자동 생성, 수동 편집 금지 -->
+> **마지막 세션:** 2026-06-26 | 커밋 `(현재 HEAD)`
+>
+> **완료한 작업:**
+> - omx team으로 update 프로젝트 병렬 정리 실행
+> - career school/subject 통합 상태 문서 정합성 반영
+> - academyinfo 429 운영 안정화안/테스트 보강
+> - robocode-admin 모니터링 1차 데이터 계약 문서 보강
+>
+> **남은 작업:**
+> - 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
+> - [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 cron 배치 재설계
+> - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
+>
+> **다음에 시작할 곳:** academyinfo school_indicator 분할 cron 운영안 서버 반영 여부와 최근 적재 로그 확인
+<!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
+- [ ] [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 cron 배치 재설계
+
+- [x] 2026-06-26 career 적성검사 API 사용자용 웹 연동 설계 문서 작성
+
+- [ ] robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
+
+- [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
 ## 완료
+- [x] 2026-06-26 omx team으로 update 프로젝트 병렬 정리 실행
+- [x] 2026-06-26 career school_list / subject_list 수집 명령 추가 및 서버 실적재 검증
+- [x] 2026-06-26 academyinfo school_indicator 수집에 중간 commit / 429 retry 반영
+- [x] 2026-06-26 robocode-admin/db/ 1차 상태 페이지 html/php 초안 작성
+- [x] 2026-06-26 update / robocode-admin 역할 분리 문서 작성
+- [x] 2026-06-26 career 적성검사 웹 연동 계획 문서 작성
 - [x] 2026-06-26 career 적성검사 OpenAPI(v1/v2) 확인 및 스펙 문서 초안 작성
 - [x] 2026-06-26 미구현/부분구현 빠른 확인용 `IMPLEMENTATION_GAPS.md` 작성
 - [x] 2026-06-26 career, academyinfo 서비스/스펙/DB/수집기 상태 매트릭스 문서 작성
