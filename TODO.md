@@ -1,5 +1,13 @@
 
 
+- [ ] caveman 모드 적용 유지
+
+- [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
+
+- [ ] academyinfo sync-subject-master 장기 실행 원인 확인 및 필요시 중단
+
+- [ ] academyinfo sync-subject-master 원인 분석 및 배치 단위 실행 수정
+
 ## 완료
 - [x] 2026-06-26 .omx ignore 처리 및 변경 요약 문서화
 - [x] 2026-06-26 AGENTS.md 최신 상태 반영 및 로컬 커밋
@@ -22,3 +30,9 @@
 - [x] 2026-06-25 로컬 md 갱신 후 서버 git 저장소에서 커밋/푸시
 - [x] 2026-06-25 ssh nazuni.net 접속해 /var/www/html/update 프로젝트 상태 확인
 - [x] 2026-06-25 career PDF 기준 DB 스키마 md 작성 및 기존 테이블 명명 규칙 반영
+- [x] 2026-06-26 career 스펙 수/테이블 수 확정
+- [x] 2026-06-26 career 수집 주기 산정
+- [x] 2026-06-26 career COLLECTION_PLAN.md 작성
+- [x] 2026-06-26 career 수집기 초안 작성
+- [x] 2026-06-26 career 서버 설정 연결 및 1회 검증
+- [ ] [버그] career sync-code-list 로그 건수 0 표시 원인 확인
