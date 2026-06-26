@@ -5,6 +5,9 @@
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 
 ## 완료
+- [x] 2026-06-26 career 적성검사 OpenAPI(v1/v2) 확인 및 스펙 문서 초안 작성
+- [x] 2026-06-26 미구현/부분구현 빠른 확인용 `IMPLEMENTATION_GAPS.md` 작성
+- [x] 2026-06-26 career, academyinfo 서비스/스펙/DB/수집기 상태 매트릭스 문서 작성
 - [x] 2026-06-26 [버그] career sync-code-list 로그 건수 0 표시 원인 확인
 - [x] 2026-06-26 로컬 career 스냅샷을 서버 기준 코드/문서로 동기화
 - [x] 2026-06-26 academyinfo sync-subject-master 장기 실행 원인 확인 및 필요시 중단
