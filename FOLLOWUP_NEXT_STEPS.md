@@ -5,6 +5,22 @@
 - 이 저장소는 서버 `/var/www/html/update` 기준 코드/문서 스냅샷이다. 실행·cron·적재 검증의 최종 근거는 서버에서 다시 확인한다. (`AGENTS.md`, `career/IMPLEMENTATION_SCOPE.md`)
 - `update` 는 수집/적재 책임만 가지며, 모니터링 화면은 `robocode-admin` 에서 분리 구현한다. (`UPDATE_ROBOCODE_ADMIN_SPLIT.md`)
 
+## 2026-06-27 서버 재검증 메모
+
+- 서버 접속: `ssh nazuni.net`
+- 서버 HEAD: `97a0890`
+- 서버 crontab 재확인 결과, `academyinfo`/`career` cron 항목은 문서와 일치했고 **이번 확인에서는 crontab 수정이 필요하지 않았다.**
+- `academyinfo`
+  - `sync_school_indicator_batch.log` 에 월 3일 롤링 cron 헤더(`offset=0 limit=9`)가 남아 있다.
+  - `2026-06-27 10:41` 수동 스모크 `sync-school-indicators --scope latest --school-offset 0 --school-limit 1` 실행 시 여러 endpoint 반영 후 `/getComparisonFullTimeFacultyResearchCrntSt` 에서 `HTTP 429` 재시도 4회 뒤 중단됐다.
+  - 따라서 **cron 등록 상태는 맞지만 429 완화 여부는 아직 운영 완료로 닫지 않는다.**
+- `career`
+  - `manual_sync_school_list.log` → `2026-06-26 17:32` 총 `13261건`
+  - `manual_sync_subject_list.log` → `2026-06-26 17:32` 총 `557건`
+  - `sync_subject_detail.log` → `2026-06-27 01:48` `high/1~3` 상세 동기화 완료
+  - `manual_sync_aptitude_meta.log` → `2026-06-27 02:06` 검사 `2건`, 문항 `146/145건`
+  - `manual_worker3_sync_subject_detail_smoke.log`, `manual_worker3_sync_aptitude_meta_smoke.log` 로 `2026-06-27 10:41` 재스모크를 추가 남겼다.
+
 ## 바로 이어갈 작업 1 — academyinfo `school_indicator_list` 분할 cron 운영 확정
 
 ### 근거
@@ -67,10 +83,10 @@
 - [ ] `UPDATE_ROBOCODE_ADMIN_SPLIT.md` 책임 분리가 유지됨
 
 ### 서버 운영 검증
-- [ ] 서버 crontab 에 academyinfo 분할 배치 등록 현황 확인
-- [ ] 서버 crontab 에 career `sync-school-list`, `sync-subject-list` 등록 현황 확인
-- [ ] 최근 로그에서 academyinfo 429 여부/offset 범위 확인
-- [ ] 최근 로그에서 career 학교/학과 적재 성공 여부 확인
+- [x] 서버 crontab 에 academyinfo 분할 배치 등록 현황 확인
+- [x] 서버 crontab 에 career `sync-school-list`, `sync-subject-list` 등록 현황 확인
+- [x] 최근 로그에서 academyinfo 429 여부/offset 범위 확인
+- [x] 최근 로그에서 career 학교/학과 적재 성공 여부 확인
 
 ### 코드/테스트 검증
 - [ ] `python3 -m unittest academyinfo.tests.test_update_academyinfo`
