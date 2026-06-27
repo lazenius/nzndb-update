@@ -136,6 +136,20 @@
   - `db_fetch_all($sql)` 같은 범용 함수는 `nznlab/db/mysql` 공통부 또는 각 도메인 `common.inc` 에 둔다.
   - 화면 정렬/출력 포맷 로직은 `robocode-admin/db` 에 남긴다.
 
+### 조회 라이브러리 ↔ 페이지 연결 기준
+
+| 페이지 | 우선 호출 라이브러리 | 최소 진입 함수 | 비고 |
+|---|---|---|---|
+| `robocode-admin/db/career_status.php` | `nznlab/db/career/status.inc` | `career_get_status_rows()` | 표 렌더만 페이지에 남긴다. |
+| `robocode-admin/db/academyinfo_status.php` | `nznlab/db/academyinfo/status.inc` | `academyinfo_get_status_rows()` | `school_indicator_list` 비고 규칙까지 포함한다. |
+| `robocode-admin/db/schools.php` | `nznlab/db/career/schools.inc`, `nznlab/db/academyinfo/schools.inc` | `career_get_schools()`, `academyinfo_get_schools()` | `all` 병합/정렬은 페이지 책임이다. |
+| `robocode-admin/db/subjects.php` | `nznlab/db/career/subjects.inc`, `nznlab/db/academyinfo/subjects.inc` | `career_get_subjects()`, `academyinfo_get_subjects()` | 검색 파라미터 정규화는 페이지에서 한다. |
+| `robocode-admin/db/collector_runs.php` | 직접 로그 요약 또는 추후 `nznlab/db/*/status.inc` 보조 함수 | 미정 | 1차는 직접 로그 tail 허용, SQL 집계와 섞지 않는다. |
+
+- 1차 기준에서 `status.inc`, `schools.inc`, `subjects.inc` 는 **도메인별 조회 전용**으로 유지한다.
+- `robocode-admin/db/*.php` 는 `$_GET` 정리, 호출 분기, HTML 출력만 담당한다.
+- `update` 저장소는 위 함수가 참조할 SQL/로그 계약만 보증하고, 화면 구현 자체는 담당하지 않는다.
+
 ### `schools.php` 1차 SQL 이관 스케치
 
 - `robocode-admin/db/schools.php` 에 남길 것
@@ -269,7 +283,7 @@ UNION ALL
 SELECT 'subject_list', COUNT(*), MAX(svy_yr), MAX(recv_time)
 FROM ACADEMYINFO_DB.subject_list
 UNION ALL
-SELECT 'school_indicator_list', COUNT(*), MAX(svy_yr), MAX(recv_time)
+SELECT 'school_indicator_list', COUNT(*), MAX(indct_yr), MAX(recv_time)
 FROM ACADEMYINFO_DB.school_indicator_list
 UNION ALL
 SELECT 'regional_indicator_list', COUNT(*), MAX(svy_yr), MAX(recv_time)
@@ -344,3 +358,33 @@ FROM ACADEMYINFO_DB.startup_support_list;
 - `subjects.php`
   - 데이터 소스: `ACADEMYINFO_DB.subject_list`, `CAREER_DB.subject_list`
   - 기본 기능: 도메인 필터, 학과명 검색, 학교/단과대/계열 보조 정보 확인
+
+## 9. nznlab / robocode-admin 연동 스모크 기준
+
+서버 `/var/www/html` 기준 구현 후 최소 스모크는 아래 순서로 본다.
+
+1. 문법 확인
+   - `php -l /var/www/html/nznlab/db/career/status.inc`
+   - `php -l /var/www/html/nznlab/db/academyinfo/status.inc`
+   - `php -l /var/www/html/nznlab/db/career/schools.inc`
+   - `php -l /var/www/html/nznlab/db/academyinfo/schools.inc`
+   - `php -l /var/www/html/nznlab/db/career/subjects.inc`
+   - `php -l /var/www/html/nznlab/db/academyinfo/subjects.inc`
+   - `php -l /var/www/html/robocode-admin/db/career_status.php`
+   - `php -l /var/www/html/robocode-admin/db/academyinfo_status.php`
+   - `php -l /var/www/html/robocode-admin/db/schools.php`
+   - `php -l /var/www/html/robocode-admin/db/subjects.php`
+2. 조회 함수 단독 확인
+   - `career_get_status_rows()` 는 `code_list`, `job_list`, `school_list`, `subject_list`, `subject_detail_list` 5행을 반환해야 한다.
+   - `academyinfo_get_status_rows()` 는 `year_list`, `school_list`, `subject_list`, `school_indicator_list`, `regional_indicator_list`, `startup_support_list` 를 포함해야 한다.
+   - `career_get_schools()`, `academyinfo_get_schools()` 는 빈 검색어 기준 최근 `recv_time desc` 정렬 1페이지 응답이 나와야 한다.
+   - `career_get_subjects()`, `academyinfo_get_subjects()` 도 같은 방식으로 1페이지 응답을 확인한다.
+3. 페이지 스모크 확인
+   - `career_status.php`, `academyinfo_status.php` 는 빈 GET 기준 경고/치명 오류 없이 표 HTML 을 렌더해야 한다.
+   - `schools.php?domain=career&q=` 와 `subjects.php?domain=academyinfo&q=` 는 최소 1건 이상 또는 빈 결과 표를 정상 렌더해야 한다.
+   - `collector_runs.php` 는 `sync_school_indicator_batch.log` 의 마지막 batch offset 과 `HTTP 429` 문자열 노출 여부를 함께 보여줘야 한다.
+4. 운영 확인 포인트
+   - 상태 페이지의 비고 컬럼은 `UPDATE_MONITORING_DATA_CONTRACT.md` 의 작업명↔로그 파일 규칙과 동일해야 한다.
+   - `school_indicator_list` 최신 연도 표시는 `MAX(indct_yr)` 기준으로 맞춘다.
+   - `school_indicator_list` 는 행 수만 보여주고 끝내지 말고 최근 로그 판단 결과를 같이 붙인다.
+   - 적성검사 API는 사용자 기능 본체가 아니라 운영 로그 관찰 대상으로만 다룬다.

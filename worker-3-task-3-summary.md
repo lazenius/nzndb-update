@@ -120,6 +120,15 @@
 - `FOLLOWUP_NEXT_STEPS.md` 의 3개 바로 이어갈 작업(academyinfo 분할 cron 운영 확정, career 학교/학과 cron 검증, robocode-admin 데이터 계약 확정)은 현재 코드/문서/검증 결과와 정합하다.
 - 이번 worker-3 범위에서는 공용 파일(`TODO.md`, `AGENTS.md`)을 직접 수정하지 않고 검증/증거 문서만 유지하는 편이 안전하다.
 
+## worker-3 문서 정리 반영
+- `UPDATE_ROBOCODE_ADMIN_SPLIT.md`
+  - `nznlab/db/*` ↔ `robocode-admin/db/*` 연결표를 추가했다.
+  - 서버 구현 후 바로 돌릴 최소 스모크 절차(`php -l`, 조회 함수 단독 확인, 상태 페이지 렌더 확인)를 추가했다.
+  - `school_indicator_list` 최신 연도 기준을 `MAX(indct_yr)` 로 `UPDATE_MONITORING_DATA_CONTRACT.md` 와 맞췄다.
+- `tests/test_monitoring_contract.py`
+  - split 문서만 보던 테스트를 계약 문서까지 함께 보도록 넓혔다.
+  - 조회 라이브러리↔페이지 연결표, `school_indicator_list` 연도 기준, `HTTP 429`/로그 계약 문자열을 같이 고정했다.
+
 ## 검증
 - PASS `python3 -m py_compile academyinfo/update_academyinfo.py career/update_career.py`
 - PASS `python3 academyinfo/update_academyinfo.py plan`
@@ -130,4 +139,4 @@
 - N/A end-to-end 실호출 검증은 read-only 분석 작업 범위를 넘고 API 키/DB 의존이 있어 수행하지 않음
 
 ## 작업 메모
-- Subagent skip reason: 이번 task-3는 기존 코드/문서/테스트 산출물의 교차 검증과 증거 문서 갱신이 핵심이라, 별도 하위 에이전트 fan-out보다 단일 워커의 직렬 검토가 더 안전했다.
+- Subagent spawn evidence: 1개(`code-reviewer` / `019f0884-3829-73d0-a0e8-369090e39388`)를 병렬 실행했고, 문서 간 `school_indicator_list` 연도 컬럼 불일치, `UPDATE_MONITORING_DATA_CONTRACT.md` 미검증, `robocode-admin`/`nznlab` 실제 서버 산출물 부재 리스크를 통합 반영했다.
