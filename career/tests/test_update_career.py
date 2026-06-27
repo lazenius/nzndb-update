@@ -53,6 +53,75 @@ class UpdateCareerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.sync_subject_detail(seq=8)
 
+    def test_sync_subject_detail_uses_university_fallback_and_feature_cleanup(self):
+        module = load_module()
+        calls = []
+        commits = []
+        saved = []
+
+        class DummyCursor:
+            connection = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class DummyConn:
+            def cursor(self):
+                return DummyCursor()
+
+            def commit(self):
+                commits.append('commit')
+
+            def close(self):
+                commits.append('close')
+
+        module.ensure_tables = lambda: None
+        module.connect_db = lambda database=None: DummyConn()
+        module.load_subject_rows = lambda cur, school='', limit=0: [
+            {'school': 'univ', 'seq': '8'},
+        ]
+        module.fetch_subject_detail = lambda school_key, seq: (
+            f'https://example.com/{school_key}/{seq}',
+            '<xml />',
+        )
+        module.save_raw = lambda job_name, file_name, payload: saved.append((job_name, file_name, payload['url']))
+        module.log = lambda message: None
+        module.parse_xml_contents = lambda payload: ['node']
+        module.replace_subject_detail = lambda cur, school_key, seq, node: calls.append(('detail', school_key, seq, node))
+        module.replace_subject_text_rows = lambda cur, school_key, seq, section, rows, name_key, desc_key: calls.append(
+            ('text', section, tuple(rows))
+        )
+        module.replace_subject_school_rows = lambda cur, school_key, seq, rows: calls.append(('school', tuple(rows)))
+        module.replace_subject_chart_rows = lambda cur, school_key, seq, chart_type, rows: calls.append(
+            ('chart', chart_type, tuple(rows))
+        )
+        module.replace_subject_feature_rows = lambda cur, school_key, seq, feature_group, feature_type, rows: calls.append(
+            ('feature', feature_group, feature_type, tuple(rows))
+        )
+        module.xml_contents = lambda target, tag: (
+            ['univ-row'] if target == 'node' and tag == 'university' else
+            ['grad-row'] if target == 'node' and tag == 'graduation_gender' else
+            [f'{tag}-row'] if target == 'node' and tag in ('relate_subject', 'career_act', 'enter_field', 'main_subject') else
+            []
+        )
+        module.xml_child = lambda node, key: None
+
+        module.sync_subject_detail(limit=1)
+
+        self.assertEqual(
+            [('sync_subject_detail', 'univ-8.json', 'https://example.com/univ/8')],
+            saved,
+        )
+        self.assertIn(('detail', 'univ', 8, 'node'), calls)
+        self.assertIn(('school', ('univ-row',)), calls)
+        self.assertIn(('chart', 'graduation_gender', ('grad-row',)), calls)
+        self.assertIn(('feature', 'GenCD', 'popular', ()), calls)
+        self.assertIn(('feature', 'GenCD', 'bookmark', ()), calls)
+        self.assertEqual(['commit', 'close'], commits)
+
     def test_sync_aptitude_meta_uses_v2_test_list(self):
         module = load_module()
         calls = []
@@ -120,6 +189,40 @@ class UpdateCareerTest(unittest.TestCase):
             ('question', 'v2', 34, 1),
         ], calls)
         self.assertEqual(['commit', 'close'], commits)
+
+    def test_main_dispatches_subject_detail_and_aptitude_commands(self):
+        module = load_module()
+        visited = []
+
+        module.build_parser = lambda: type('Parser', (), {
+            'parse_args': lambda self: type('Args', (), {
+                'command': 'sync-subject-detail',
+                'school': 'univ',
+                'seq': 8,
+                'limit': 3,
+            })(),
+            'error': lambda self, message: (_ for _ in ()).throw(AssertionError(message)),
+        })()
+        module.sync_subject_detail = lambda school='', seq=0, limit=0: visited.append(
+            ('subject-detail', school, seq, limit)
+        )
+
+        module.main()
+
+        module.build_parser = lambda: type('Parser', (), {
+            'parse_args': lambda self: type('Args', (), {
+                'command': 'sync-aptitude-meta',
+            })(),
+            'error': lambda self, message: (_ for _ in ()).throw(AssertionError(message)),
+        })()
+        module.sync_aptitude_meta = lambda: visited.append(('aptitude-meta',))
+
+        module.main()
+
+        self.assertEqual([
+            ('subject-detail', 'univ', 8, 3),
+            ('aptitude-meta',),
+        ], visited)
 
 
 if __name__ == '__main__':
