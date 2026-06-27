@@ -12,7 +12,7 @@
 - 로컬 저장소는 서버 기준 코드/문서를 가져오는 **스냅샷 저장소**로 유지한다.
 - 현재 스냅샷에는 다음이 반영돼 있다.
   - 통합 엔트리포인트: `career/update_career.py`
-  - 복원/탐색용 개별 스크립트: `career/update_code.py`, `career/update_jobs.py`, `career/update_school.py`, `career/update_major.py`, `career/update_major_view.py`, `career/update_school_test.py`
+  - 복원/탐색용 개별 스크립트: `career/update_code.py`, `career/update_jobs.py`, `career/update_school.py`, `career/update_major.py`, `career/update_major_view.py`, `career/update_school_probe.py`
   - 공통 모듈: `career/include/crawler_common.py`
 - 서버에는 최소 다음 cron 이 등록돼 있다.
   - 매월 코드표 동기화

@@ -9,7 +9,7 @@
 - `update/career/update_school.py:44-90`와 `update/career/update_major.py:16-60`는 전체 XML을 한 번에 읽어 단일 트랜잭션으로 적재한다.
 - `update/career/update_code.py:23-34`는 코드 마스터를 일괄 적재한다.
 - `update/career/update_major_view.py:26-30`는 `print(soup.prettify())` 후 `exit()` 하는 탐색용 스크립트 상태다.
-- `update/career/update_school_test.py:45-50`도 실질 테스트가 아니라 응답 덤프용 확인 스크립트다.
+- `update/career/update_school_probe.py:45-50`도 실질 테스트가 아니라 응답 덤프용 확인 스크립트다.
 
 ## 개선 후보
 
@@ -63,7 +63,7 @@
 
 근거:
 - 현재는 `print()`만 있고 성공/실패 건수, 소요 시간, 마지막 page/jcode 기록이 없다.
-- `update_major_view.py`와 `update_school_test.py`는 디버그 출력이 그대로 남아 있다.
+- `update_major_view.py`와 `update_school_probe.py`는 디버그 출력이 그대로 남아 있다.
 
 개선 방향:
 - 서비스별 공통 로그 포맷: start/end, fetched, inserted, updated, skipped, failed
@@ -87,7 +87,7 @@
 
 근거:
 - 현재 저장소에는 pytest/unittest 기반 자동 테스트가 없다.
-- `update_school_test.py`는 이름만 test이고 실제 assertion이 없다.
+- `update_school_probe.py`는 기존 `update_school_test.py`에서 이름만 바로잡은 응답 덤프용 확인 스크립트라 자동 assertion이 없다.
 
 개선 방향:
 - API 응답 fixture(JSON/XML) 저장
