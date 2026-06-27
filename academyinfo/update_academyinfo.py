@@ -965,6 +965,12 @@ def slice_schools(schools, school_offset=0, school_limit=None):
     return schools
 
 
+def school_batch_context(school_offset=0, school_limit=None, school_count=None):
+    limit_text = 'all' if school_limit is None else str(school_limit)
+    count_text = '?' if school_count is None else str(school_count)
+    return f'offset={school_offset} limit={limit_text} count={count_text}'
+
+
 def load_indicator_codes(cur):
     cur.execute(
         f"""
@@ -1197,6 +1203,12 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
     if not schools:
         raise RuntimeError('school_list가 비어 있습니다. 먼저 sync-school-master 실행 필요')
     schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
+    batch_context = school_batch_context(
+        school_offset=school_offset,
+        school_limit=school_limit,
+        school_count=len(schools),
+    )
+    log(f'sync-school-indicators batch {batch_context}')
 
     for endpoint in endpoints:
         for school in schools:
@@ -1215,7 +1227,7 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                     items = fetch_pages(endpoint, params, 'sync_school_indicator')
                 except HTTPError as exc:
                     if exc.code == 429:
-                        log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - 현재 배치까지 반영 후 중단')
+                        log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - {batch_context} 현재 배치까지 반영 후 중단')
                         commit_cursor(cur)
                         return
                     raise
