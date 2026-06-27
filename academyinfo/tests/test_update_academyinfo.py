@@ -72,6 +72,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         module = load_module()
         visited = []
         commits = []
+        logs = []
 
         class Http429(module.HTTPError):
             def __init__(self):
@@ -91,7 +92,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
 
         module.fetch_pages = fake_fetch
         module.upsert_school_indicator = lambda cur, api_id, item, params: None
-        module.log = lambda message: None
+        module.log = lambda message: logs.append(message)
         module.commit_cursor = lambda cur: commits.append('commit')
 
         module.sync_school_indicators(
@@ -102,6 +103,8 @@ class UpdateAcademyinfoTest(unittest.TestCase):
 
         self.assertEqual(['0001', '0002'], visited)
         self.assertEqual(['commit', 'commit'], commits)
+        self.assertIn('sync-school-indicators batch offset=0 limit=all count=2', logs)
+        self.assertIn('/getComparisonLibraryBudgetCrntSt 0002/2025 HTTP 429 - offset=0 limit=all count=2 현재 배치까지 반영 후 중단', logs)
 
     def test_sync_school_indicators_uses_school_batch(self):
         module = load_module()
