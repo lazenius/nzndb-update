@@ -53,7 +53,7 @@
 - cron 등록 여부가 예/아니오로 명시돼 있다.
 - `school_list`, `subject_list` 최신 적재 근거가 로그 또는 DB 조회로 남아 있다.
 
-## 바로 이어갈 작업 3 — robocode-admin 1차 상태 페이지용 데이터 계약 확정
+## 바로 이어갈 작업 3 — robocode-admin/db 1차 모니터링 페이지 구현
 
 ### 근거
 - `TODO.md` 미완료 항목이다.
@@ -61,13 +61,19 @@
 - 현재 `update` 쪽에서 먼저 확정해야 할 것은 UI가 아니라 조회 SQL/로그 경로 규칙이다.
 
 ### 해야 할 일
-1. `career_status`, `academyinfo_status`, `collector_runs` 에 필요한 SQL과 로그 경로 규칙을 루트 문서로 고정
+1. `career_status`, `academyinfo_status`, `collector_runs` 에 필요한 SQL과 로그 경로 규칙을 `UPDATE_MONITORING_DATA_CONTRACT.md` 로 고정
 2. `HTTP 429` 를 문자열 검색으로 볼지, 별도 실행 이력 테이블이 필요한지 결정
 3. 그 결과만 `robocode-admin/db/` 구현 입력 계약으로 넘김
 
 ### 완료 기준
-- 페이지별 데이터 소스, 최소 컬럼, SQL 또는 로그 추출 규칙이 확정돼 있다.
-- `update` 와 `robocode-admin` 책임 경계가 문서상 다시 섞이지 않는다.
+- 서버 `robocode-admin/db/` 에 1차 조회 페이지가 실제로 존재한다.
+- `update` 와 `robocode-admin` 책임 경계가 문서/코드 모두에서 유지된다.
+
+## 빠르게 끝낼 다음 작은 작업
+
+1. [완료] `nznlab/db/academyinfo`, `nznlab/db/career` 디렉터리/파일명 규칙 문서 확정
+2. [완료] `schools.php`, `subjects.php`, `career_status.php`, `academyinfo_status.php` 에서 공통으로 빠질 조회 함수 목록 문서화
+3. [착수] `schools.php` 기준 실제 SQL 이관 스케치 문서화 완료, 다음은 코드 이관
 
 ## 지금 보류할 항목
 

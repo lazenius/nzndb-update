@@ -1208,6 +1208,7 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
         school_limit=school_limit,
         school_count=len(schools),
     )
+    processed_school_count = 0
     log(f'sync-school-indicators batch {batch_context}')
 
     for endpoint in endpoints:
@@ -1234,7 +1235,9 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                 for item in items:
                     upsert_school_indicator(cur, endpoint_name(endpoint['path']), item, params)
                 log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
+            processed_school_count += 1
             commit_cursor(cur)
+    log(f'sync-school-indicators batch completed {batch_context} processed_schools={processed_school_count}')
 
 
 def sync_regional_indicators(cur, endpoints):

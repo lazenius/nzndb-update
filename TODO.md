@@ -26,12 +26,18 @@
 
 - [x] 2026-06-26 career 적성검사 API 사용자용 웹 연동 설계 문서 작성
 
+- [x] 2026-06-27 academyinfo/career 스펙 구현 범위 1~3번 분석 (부분구현 목록, 미구현 표, 코드 기준 endpoint 체크리스트)
+
 - [ ] robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
+- [ ] nznlab/db/career, nznlab/db/academyinfo 조회 라이브러리 초안 작성 후 robocode-admin/db SQL 분리
+- [x] 2026-06-27 robocode-admin/db 모니터링 1차 구현 (스펙 전체보기, 학교 조회, 학과 조회, 수집 로그)
 - [ ] (나중에) 서버 academyinfo/common.py 미추적 파일 정리
 
 - [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
 ## 완료
+- [x] 2026-06-27 omx team으로 update 수집기/cron + nznlab/robocode-admin 모니터링 후속 진행
+- [x] 2026-06-27 nznlab/db/career, nznlab/db/academyinfo 조회 함수로 schools.php SQL 실제 분리
 - [x] 2026-06-27 academyinfo school_indicator 배치 실행 시간 측정 및 cron batch 크기 재조정 검토
 - [x] 2026-06-27 career, academyinfo 수집 프로그램 추가 개발 및 cron 등록 후속
 - [x] 2026-06-27 [버그] academyinfo sync-school-indicators 가 3개 학교 배치도 장시간 실행되는 원인 분석

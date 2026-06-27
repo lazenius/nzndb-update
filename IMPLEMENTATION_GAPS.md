@@ -36,7 +36,7 @@
 |---|---|---|
 | `getCodeBySeriesSystem` | 현재 `raw` 우선 보관, DB 정규화 미확정 | 코드 체계 컬럼 설계 후 `code_list` 또는 별도 테이블 적재 확정 |
 | 산학협력 7개 스펙 | `startup_support_list` key-value 1차 적재 기준 | 실제 응답 기준 컬럼 정규화 후 테이블 재설계 여부 결정 |
-| `school_indicator_list` 운영 적재 | 코드/테이블은 구현됐고, `HTTP 429` 발생 시 현재 배치 commit 후 중단하도록 반영됨 | cron 을 학교 배치 단위(`--school-offset`, `--school-limit`)로 쪼개고 오프피크 순차 실행 기준 확정 |
+| `school_indicator_list` 운영 적재 | 코드/테이블은 구현됐고, `HTTP 429` 발생 시 현재 배치 commit 후 중단하도록 반영됨. `9`건 단위 롤링 cron 문서화도 반영됨 | 서버 로그 기준으로 분할 운영 안정화와 월간 누락/429 종결 확인 |
 
 ### 미구현 또는 후속검토
 

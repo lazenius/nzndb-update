@@ -109,6 +109,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
     def test_sync_school_indicators_uses_school_batch(self):
         module = load_module()
         visited = []
+        logs = []
 
         module.load_schools = lambda cur, scope='latest': [
             {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
@@ -118,7 +119,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         module.load_indicator_codes = lambda cur: []
         module.fetch_pages = lambda endpoint, params, job_name: visited.append((endpoint['path'], params['schlId'])) or []
         module.upsert_school_indicator = lambda cur, api_id, item, params: None
-        module.log = lambda message: None
+        module.log = lambda message: logs.append(message)
         module.commit_cursor = lambda cur: None
 
         module.sync_school_indicators(
@@ -132,6 +133,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         self.assertEqual([
             ('/getComparisonLibraryBudgetCrntSt', '0002'),
         ], visited)
+        self.assertIn('sync-school-indicators batch completed offset=1 limit=1 count=1 processed_schools=1', logs)
 
     def test_sync_startup_support_uses_school_batch(self):
         module = load_module()

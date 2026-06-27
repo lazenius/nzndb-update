@@ -15,6 +15,9 @@
   - `code_list`
   - `year_list`
 - 학교 마스터는 `latest` 실행 시 **빈 최신연도(예: 2026)** 를 건너뛰고 최근 유효연도로 fallback 하도록 반영됨
+- `sync-school-indicators` 는 `--school-offset`, `--school-limit` 배치 실행이 가능함
+- `sync-school-indicators` 는 재시도 후에도 `HTTP 429` 가 발생하면 **현재 배치까지 commit 후 중단**하도록 반영됨
+- 다만 `school_indicator_list` 운영 안정화는 아직 미완료이며, 서버 로그 기준 재검증이 계속 필요함
 
 ## 주요 파일
 
@@ -73,7 +76,18 @@ cd /var/www/html/update/academyinfo
 python3 update_academyinfo.py plan
 python3 update_academyinfo.py sync-code-year --scope latest
 python3 update_academyinfo.py sync-school-master --scope latest
+python3 update_academyinfo.py sync-school-indicators --scope latest --school-offset 0 --school-limit 1
 ```
+
+## `school_indicator_list` 운영 메모
+
+- 기준 로그 파일: `academyinfo/logs/sync_school_indicator_batch.log`
+- 서버 cron 은 `9`건 단위 롤링 배치 기준으로 등록돼 있다.
+- 모니터링에서는 최소 아래 3가지를 함께 본다.
+  - 마지막 `[batch] offset=<n> limit=<m>` 헤더
+  - 마지막 `HTTP 429` 발생 여부
+  - 마지막 `batch completed ... processed_schools=<n>` 종료 로그
+- 상세 운영 기준은 `COLLECTION_PLAN.md`, 모니터링 계약은 루트 `UPDATE_MONITORING_DATA_CONTRACT.md` 를 따른다.
 
 ## 주의
 

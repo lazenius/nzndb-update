@@ -15,7 +15,7 @@
 |---|---:|---|---|---|---|
 | 코드 마스터 | 3 | `code_list` | 예 | 예 | `sync-code-list`로 운영 |
 | 직업 목록/상세 | 2 | `job_list`, `job_work_list`, `interest_list`, `research_list`, `job_ready_list`, `forecast_list`, `perform_list`, `ability_list`, `depart_list`, `tag_list`, `job_rel_org_list` | 예 | 예 | `sync-job-list`, `sync-job-detail` 운영 |
-| 학교 정보 | 6 | `school_list` | 예 | 예 | `sync-school-list` 구현 완료, 서버 정기 cron 편성은 후속 |
+| 학교 정보 | 6 | `school_list` | 예 | 예 | `sync-school-list` 구현 완료, 서버 정기 cron 반영 |
 | 학과 정보 | 2 | `subject_list`, `subject_detail_list`, `subject_text_list`, `subject_school_map`, `subject_chart_list`, `subject_feature_list` | 예 | 예 | `sync-subject-list`, `sync-subject-detail` 구현 완료, 서버 정기 cron 반영 |
 | 적성/진로심리검사 API | 5 | `aptitude_test_list`, `aptitude_question_list`, `aptitude_choice_list` | 부분 | 부분 | v2 검사 목록/문항 메타 캐시만 수집 |
 
