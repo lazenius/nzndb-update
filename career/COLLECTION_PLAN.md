@@ -150,26 +150,35 @@
 - `job.json` 반복 노드는 직업코드 기준 삭제 후 재적재 방식이 단순하다.
 - `edu_chart`, `major_chart`, `indicator_chart`는 현재 PK가 단순해 실응답 기준 재검토가 필요하다.
 - 학교/학과 목록 명령은 구현 및 정기 cron 편성까지 반영됐다.
-- 학과 상세 명령은 구현 및 정기 cron 편성까지 반영됐고, 서버 수동 스모크 검증이 추가로 필요하다.
-- 적성검사 메타 캐시 명령은 v2 검사 목록/문항 기준으로 월배치 편성 대상이다.
+- 학과 상세 명령은 구현 및 정기 cron 편성까지 반영됐고, 서버 수동 스모크 검증까지 완료됐다.
+- 적성검사 메타 캐시 명령은 v2 검사 목록/문항 기준으로 월배치 편성 대상이며, 서버 수동 스모크 검증까지 완료됐다.
 - `sync-all`은 이제 학교/학과 목록과 학과 상세까지 함께 수행하지만, 운영 cron은 여전히 개별 로그 분리를 위해 별도 명령 기준을 유지한다.
 
 ## 현재 반영 상태
 
 - 문서 작성 완료
 - 서버 기준 수집기 반영 완료 (`career/update_career.py`)
-- 서버 cron 일부 등록 완료
+- 서버 cron 등록 완료
   - `sync-code-list`
   - `sync-job-list`
   - `sync-job-detail`
+  - `sync-school-list`
+  - `sync-subject-list`
+  - `sync-subject-detail`
+  - `sync-aptitude-meta`
 - 학교/학과 목록 명령 구현 및 서버 1회 실적재 검증 완료
   - `sync-school-list`
   - `sync-subject-list`
-- 학과 상세 명령 구현 완료
+- 학과 상세 명령 구현 및 서버 1회 수동 스모크 검증 완료
   - `sync-subject-detail`
-- 적성검사 메타 캐시 명령 구현 완료
+- 적성검사 메타 캐시 명령 구현 및 서버 1회 수동 스모크 검증 완료
   - `sync-aptitude-meta`
+- 최근 서버 검증 근거
+  - `2026-06-26 17:32` `logs/manual_sync_school_list.log` → `school_list 동기화 완료: 총 13261건`
+  - `2026-06-26 17:32` `logs/manual_sync_subject_list.log` → `subject_list 동기화 완료: 총 557건`
+  - `2026-06-27 01:48` `logs/sync_subject_detail.log` → `subject high/1~3 상세 동기화 완료`
+  - `2026-06-27 02:06` `logs/manual_sync_aptitude_meta.log` → `aptitude meta 동기화 완료: 총 2건`
+  - `2026-06-27 10:41` `logs/manual_worker3_sync_subject_detail_smoke.log` → `subject high/1 상세 동기화 완료`
+  - `2026-06-27 10:41` `logs/manual_worker3_sync_aptitude_meta_smoke.log` → `aptitude meta 동기화 완료: 총 2건`
 - 남은 과제
-  - subject-detail 서버 1회 수동 실행 검증
-  - aptitude meta 서버 1회 수동 실행 검증
   - school/subject 주기별 적재 건수/로그 검증
