@@ -29,13 +29,25 @@
 - [x] 2026-06-27 academyinfo/career 스펙 구현 범위 1~3번 분석 (부분구현 목록, 미구현 표, 코드 기준 endpoint 체크리스트)
 
 - [ ] robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
-- [ ] nznlab/db/career, nznlab/db/academyinfo 조회 라이브러리 초안 작성 후 robocode-admin/db SQL 분리
+- [ ] omx team으로 nznlab 조회 라이브러리 구현 및 robocode-admin 연동 테스트
 - [x] 2026-06-27 robocode-admin/db 모니터링 1차 구현 (스펙 전체보기, 학교 조회, 학과 조회, 수집 로그)
 - [ ] (나중에) 서버 academyinfo/common.py 미추적 파일 정리
+- [ ] 지난 세션 중단된 omx team 상태 점검 및 재개
 
 - [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
 ## 완료
+- [x] 2026-06-28 collector_runs 운영 기준 로그 목록 단일 소스화
+- [x] 2026-06-28 robocode-admin/db 백업 .bak-* 및 html/php 역할 기준 문서화
+- [x] 2026-06-28 nznlab 대시보드 요약 라이브러리 추가 후 robocode-admin/db/index 분리
+- [x] 2026-06-28 robocode-admin/db/common.php 남은 helper 사용처 정리
+- [x] 2026-06-28 nznlab spec 문서 조회 라이브러리 추가 후 robocode-admin/db/specs.php 분리
+- [x] 2026-06-28 nznlab/db/career, nznlab/db/academyinfo 조회 라이브러리 초안 작성 후 robocode-admin/db SQL 분리
+- [x] 2026-06-28 nznlab/db academyinfo/career collector_runs 라이브러리 추가 및 robocode-admin 연동
+- [x] 2026-06-27 nznlab/db/career subjects 조회 라이브러리 추가 및 robocode-admin 연동
+- [x] 2026-06-27 nznlab/db/career status 조회 라이브러리 추가 및 robocode-admin 연동
+- [x] 2026-06-27 robocode-admin/db/schools.php 분리 상태 재검증 완료
+- [x] 2026-06-27 nznlab/db/academyinfo subjects/status 조회 라이브러리 추가 및 robocode-admin 연동
 - [x] 2026-06-27 omx team으로 update 수집기/cron + nznlab/robocode-admin 모니터링 후속 진행
 - [x] 2026-06-27 nznlab/db/career, nznlab/db/academyinfo 조회 함수로 schools.php SQL 실제 분리
 - [x] 2026-06-27 academyinfo school_indicator 배치 실행 시간 측정 및 cron batch 크기 재조정 검토
