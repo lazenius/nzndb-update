@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -12,6 +13,12 @@ from include.common import connect_db, fetch_xml, first_non_empty, int_or_zero, 
 
 BASE_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = BASE_DIR / 'API_SPEC.md'
+
+SCHOOL_INDICATOR_REQUEST_DELAY = 0.4
+SCHOOL_INDICATOR_DELAY_BY_ENDPOINT = {
+    '/getComparisonFullTimeFacultyResearchCrntSt': 1.5,
+    '/getNoticeFullTimeFacultyResearchCrntSt': 1.0,
+}
 
 
 CODE_TYPE_MAP = {
@@ -1015,6 +1022,10 @@ def commit_cursor(cur):
         conn.commit()
 
 
+def school_indicator_request_delay(endpoint_path):
+    return SCHOOL_INDICATOR_DELAY_BY_ENDPOINT.get(endpoint_path, SCHOOL_INDICATOR_REQUEST_DELAY)
+
+
 def sync_metadata(cur, endpoints, scope):
     year_endpoints = [e for e in endpoints if is_year_endpoint(e)]
     for endpoint in year_endpoints:
@@ -1094,6 +1105,7 @@ def sync_school_master(cur, endpoints, scope):
                         'lst_updt_dtm': '',
                     })
                 log(f'{endpoint["path"]} {svy_yr} 학교 {len(items)}건 반영')
+                commit_cursor(cur)
 
     schools = load_schools(cur, scope=scope)
     for endpoint in endpoints:
@@ -1130,6 +1142,7 @@ def sync_school_master(cur, endpoints, scope):
                         'lst_updt_dtm': '',
                     })
                 log(f'{endpoint["path"]} {svy_yr} 학교검색 {len(items)}건 반영')
+                commit_cursor(cur)
             continue
 
         for school in schools:
@@ -1168,6 +1181,7 @@ def sync_school_master(cur, endpoints, scope):
                     'lst_updt_dtm': value_or_default(item, 'lstUpdtDtm'),
                 })
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
+            commit_cursor(cur)
 
 
 def sync_subject_master(cur, endpoints, scope, school_offset=0, school_limit=None):
@@ -1235,6 +1249,7 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                 for item in items:
                     upsert_school_indicator(cur, endpoint_name(endpoint['path']), item, params)
                 log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
+                time.sleep(school_indicator_request_delay(endpoint['path']))
             processed_school_count += 1
             commit_cursor(cur)
     log(f'sync-school-indicators batch completed {batch_context} processed_schools={processed_school_count}')

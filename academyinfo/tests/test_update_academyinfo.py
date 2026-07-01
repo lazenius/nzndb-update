@@ -67,6 +67,44 @@ class UpdateAcademyinfoTest(unittest.TestCase):
             ('/getSchoolMajorInfo', '0002'),
         ], visited)
 
+    def test_sync_school_master_commits_per_unit(self):
+        module = load_module()
+        commits = []
+        visited = []
+
+        module.resolve_school_master_years = lambda cur, endpoint, scope: (['2025'], {'2025': [
+            {'schlId': '0001', 'svyYr': '2025', 'schlKrnNm': '학교1', 'schlFullNm': '학교1'},
+        ]})
+        module.load_schools = lambda cur, scope='latest': [
+            {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
+            {'schl_id': '0002', 'svy_yr': '2025', 'name': '학교2'},
+        ]
+
+        def fake_fetch(endpoint, params, job_name):
+            visited.append((endpoint['path'], params.get('schlId', params.get('svyYr'))))
+            return [{
+                'schlId': params.get('schlId', '0001'),
+                'svyYr': params.get('svyYr', '2025'),
+                'schlNm': '학교',
+            }]
+
+        module.fetch_pages = fake_fetch
+        module.upsert_school_row = lambda cur, row: None
+        module.commit_cursor = lambda cur: commits.append('commit')
+        module.log = lambda message: None
+
+        endpoints = [
+            {'path': '/getUniversityCode', 'required_params': []},
+            {'path': '/getSchoolInfo', 'required_params': ['schlKrnNm']},
+        ]
+
+        module.sync_school_master(None, endpoints, 'latest')
+
+        self.assertEqual([
+            ('/getSchoolInfo', '0001'),
+            ('/getSchoolInfo', '0002'),
+        ], visited)
+        self.assertEqual(['commit', 'commit', 'commit'], commits)
 
     def test_sync_school_indicators_commits_and_stops_on_429(self):
         module = load_module()
@@ -105,6 +143,28 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         self.assertEqual(['commit', 'commit'], commits)
         self.assertIn('sync-school-indicators batch offset=0 limit=all count=2', logs)
         self.assertIn('/getComparisonLibraryBudgetCrntSt 0002/2025 HTTP 429 - offset=0 limit=all count=2 현재 배치까지 반영 후 중단', logs)
+
+    def test_sync_school_indicators_throttles_each_request(self):
+        module = load_module()
+        sleeps = []
+
+        module.load_schools = lambda cur, scope='latest': [
+            {'schl_id': '0001', 'svy_yr': '2025', 'name': '학교1'},
+        ]
+        module.load_indicator_codes = lambda cur: []
+        module.fetch_pages = lambda endpoint, params, job_name: []
+        module.upsert_school_indicator = lambda cur, api_id, item, params: None
+        module.commit_cursor = lambda cur: None
+        module.log = lambda message: None
+        module.time.sleep = lambda seconds: sleeps.append(seconds)
+
+        module.sync_school_indicators(
+            None,
+            [{'path': '/getComparisonFullTimeFacultyResearchCrntSt', 'required_params': []}],
+            'latest',
+        )
+
+        self.assertEqual([module.school_indicator_request_delay('/getComparisonFullTimeFacultyResearchCrntSt')], sleeps)
 
     def test_sync_school_indicators_uses_school_batch(self):
         module = load_module()
