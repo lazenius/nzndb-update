@@ -15,6 +15,10 @@
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
+- [x] 2026-07-02 로컬 도커 서버에 update 폴더 연결
+- [ ] 서버 career, academyinfo cron 정상 가동 여부와 최근 오류 로그 점검
+- [ ] academyinfo HTTP 429, school_master lock wait timeout 원인 파악
+- [x] 2026-06-30 ECC 플러그인 설치 및 Codex 인식 확인
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 - [ ] [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 롤링 cron 배치 안정화
@@ -36,7 +40,22 @@
 
 - [x] 2026-06-26 update / robocode-admin 역할 분리 문서화
 
+
+
+
+
+- [ ] robocode-admin/db/index.html 에 career, academyinfo 모니터링 링크 목록 추가
+- [ ] 서버 robocode-admin/db/index.html 반영
+- [ ] 로컬 도커 서버 robocode-admin/db/index.html 반영
+- [ ] 서버 robocode-admin 세션 저장 경로 권한 수정
+- [ ] 서버 admin.roboco.de Nginx index 우선순위 html 우선으로 수정
+- [ ] robocode-admin/db 서버본을 로컬에도 동기화
+- [ ] nznlab/db/career, academyinfo 서버본을 로컬에도 동기화
 ## 완료
+- [x] 2026-06-28 robocode-admin/db 전체 모니터링 및 학교/학과 조회 점검
+- [x] 2026-06-28 nznlab/db academyinfo, career 스펙 재점검 및 누락 재확인
+- [x] 2026-06-28 nznlab/db academyinfo, career 스펙 누락 점검 및 보강
+- [x] 2026-06-28 robocode-admin/db 외부 진입용 html 래퍼 추가 및 링크 전환
 - [x] 2026-06-28 collector_runs 운영 기준 로그 목록 단일 소스화
 - [x] 2026-06-28 robocode-admin/db 백업 .bak-* 및 html/php 역할 기준 문서화
 - [x] 2026-06-28 nznlab 대시보드 요약 라이브러리 추가 후 robocode-admin/db/index 분리
