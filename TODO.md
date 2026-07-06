@@ -15,8 +15,8 @@
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
+- [ ] academyinfo skip TSV 실발생분 재처리 후 누락 여부 재검증
 - [x] 2026-07-02 로컬 도커 서버에 update 폴더 연결
-- [ ] 서버 career, academyinfo cron 정상 가동 여부와 최근 오류 로그 점검
 - [ ] academyinfo HTTP 429, school_master lock wait timeout 원인 파악
 - [x] 2026-06-30 ECC 플러그인 설치 및 Codex 인식 확인
 
@@ -52,6 +52,11 @@
 - [ ] robocode-admin/db 서버본을 로컬에도 동기화
 - [ ] nznlab/db/career, academyinfo 서버본을 로컬에도 동기화
 ## 완료
+- [x] 2026-07-06 academyinfo skip TSV 재처리 커맨드 설계/구현 및 서버 스모크 검증
+- [x] 2026-07-06 career sync-job-detail 수동 실행 로그 파일 append 정리 및 서버 검증
+- [x] 2026-07-06 [버그] career sync-job-detail 월배치 중 `Duplicate entry '173-318'` 무결성 오류로 중단
+- [x] 2026-07-06 서버 career, academyinfo cron 정상 가동 여부와 최근 오류 로그 점검
+- [x] 2026-07-06 서버 career, academyinfo cron 등록/최근 로그 점검 및 보완 작업 설계
 - [x] 2026-06-28 robocode-admin/db 전체 모니터링 및 학교/학과 조회 점검
 - [x] 2026-06-28 nznlab/db academyinfo, career 스펙 재점검 및 누락 재확인
 - [x] 2026-06-28 nznlab/db academyinfo, career 스펙 누락 점검 및 보강

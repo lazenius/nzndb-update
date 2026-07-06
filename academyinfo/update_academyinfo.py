@@ -14,11 +14,13 @@ from include.common import connect_db, fetch_xml, first_non_empty, int_or_zero, 
 BASE_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = BASE_DIR / 'API_SPEC.md'
 
-SCHOOL_INDICATOR_REQUEST_DELAY = 0.4
+SCHOOL_INDICATOR_REQUEST_DELAY = 0.6
 SCHOOL_INDICATOR_DELAY_BY_ENDPOINT = {
-    '/getComparisonFullTimeFacultyResearchCrntSt': 1.5,
-    '/getNoticeFullTimeFacultyResearchCrntSt': 1.0,
+    '/getComparisonFullTimeFacultyResearchCrntSt': 3.0,
+    '/getNoticeFullTimeFacultyResearchCrntSt': 2.0,
 }
+SCHOOL_INDICATOR_429_COOLDOWN = 180
+SCHOOL_INDICATOR_SKIP_LOG_NAME = 'sync_school_indicator_skips.tsv'
 
 
 CODE_TYPE_MAP = {
@@ -972,6 +974,46 @@ def slice_schools(schools, school_offset=0, school_limit=None):
     return schools
 
 
+def filter_schools(schools, school_id='', svy_yr=''):
+    filtered = schools
+    if school_id:
+        filtered = [school for school in filtered if str(school['schl_id']) == str(school_id)]
+    if svy_yr:
+        filtered = [school for school in filtered if str(school['svy_yr']) == str(svy_yr)]
+    return filtered
+
+
+def filter_endpoints(endpoints, endpoint_path=''):
+    if not endpoint_path:
+        return endpoints
+    filtered = [endpoint for endpoint in endpoints if endpoint['path'] == endpoint_path]
+    if not filtered:
+        raise RuntimeError(f'조건에 맞는 endpoint가 없습니다: {endpoint_path}')
+    return filtered
+
+
+def filter_indicator_codes(indicator_codes, indicator_code=''):
+    if not indicator_code:
+        return indicator_codes
+    filtered = [code for code in indicator_codes if str(code) == str(indicator_code)]
+    if not filtered:
+        raise RuntimeError(f'조건에 맞는 지표코드가 없습니다: {indicator_code}')
+    return filtered
+
+
+def filter_skip_rows(rows, endpoint_path='', school_id='', svy_yr='', indicator_code=''):
+    filtered = rows
+    if endpoint_path:
+        filtered = [row for row in filtered if row['endpoint_path'] == endpoint_path]
+    if school_id:
+        filtered = [row for row in filtered if str(row['school_id']) == str(school_id)]
+    if svy_yr:
+        filtered = [row for row in filtered if str(row['svy_yr']) == str(svy_yr)]
+    if indicator_code:
+        filtered = [row for row in filtered if str(row['indicator_code']) == str(indicator_code)]
+    return filtered
+
+
 def school_batch_context(school_offset=0, school_limit=None, school_count=None):
     limit_text = 'all' if school_limit is None else str(school_limit)
     count_text = '?' if school_count is None else str(school_count)
@@ -1024,6 +1066,70 @@ def commit_cursor(cur):
 
 def school_indicator_request_delay(endpoint_path):
     return SCHOOL_INDICATOR_DELAY_BY_ENDPOINT.get(endpoint_path, SCHOOL_INDICATOR_REQUEST_DELAY)
+
+
+def record_school_indicator_skip(endpoint_path, school_id, svy_yr, indicator_code, reason):
+    common.ensure_config_loaded()
+    common.ensure_dir(common.LOG_DIR)
+    target = Path(common.LOG_DIR) / SCHOOL_INDICATOR_SKIP_LOG_NAME
+    with target.open('a', encoding='utf-8') as fp:
+        fp.write(
+            '\t'.join([
+                common.now_text(),
+                endpoint_path,
+                str(school_id),
+                str(svy_yr),
+                str(indicator_code),
+                reason,
+            ]) + '\n'
+        )
+
+
+def load_school_indicator_skip_rows(skip_tsv_path):
+    target = Path(skip_tsv_path)
+    if not target.exists():
+        raise FileNotFoundError(f'skip TSV 파일이 없습니다: {target}')
+
+    rows = []
+    for line_no, line in enumerate(target.read_text(encoding='utf-8').splitlines(), start=1):
+        if line.strip() == '':
+            continue
+        cols = line.split('\t')
+        if len(cols) < 6:
+            log(f'skip TSV {line_no}행 형식 오류 - 건너뜀')
+            continue
+        rows.append({
+            'line_no': line_no,
+            'logged_at': cols[0],
+            'endpoint_path': cols[1],
+            'school_id': cols[2],
+            'svy_yr': cols[3],
+            'indicator_code': cols[4],
+            'reason': '\t'.join(cols[5:]),
+        })
+    return rows
+
+
+def dedupe_school_indicator_skip_rows(rows):
+    seen = set()
+    deduped = []
+    for row in rows:
+        key = (
+            row['endpoint_path'],
+            row['school_id'],
+            row['svy_yr'],
+            row['indicator_code'],
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
+def default_school_indicator_skip_tsv():
+    common.ensure_config_loaded()
+    return Path(common.LOG_DIR) / SCHOOL_INDICATOR_SKIP_LOG_NAME
 
 
 def sync_metadata(cur, endpoints, scope):
@@ -1211,11 +1317,14 @@ def sync_subject_master(cur, endpoints, scope, school_offset=0, school_limit=Non
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
-def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=None):
+def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=None, school_id='', svy_yr='', indicator_code=''):
     schools = load_schools(cur, scope=scope)
-    indicator_codes = load_indicator_codes(cur)
+    indicator_codes = filter_indicator_codes(load_indicator_codes(cur), indicator_code=indicator_code)
     if not schools:
         raise RuntimeError('school_list가 비어 있습니다. 먼저 sync-school-master 실행 필요')
+    schools = filter_schools(schools, school_id=school_id, svy_yr=svy_yr)
+    if not schools:
+        raise RuntimeError('조건에 맞는 school_list가 없습니다. school_id/svy_yr 확인 필요')
     schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
     batch_context = school_batch_context(
         school_offset=school_offset,
@@ -1223,6 +1332,7 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
         school_count=len(schools),
     )
     processed_school_count = 0
+    skipped_request_count = 0
     log(f'sync-school-indicators batch {batch_context}')
 
     for endpoint in endpoints:
@@ -1242,9 +1352,19 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                     items = fetch_pages(endpoint, params, 'sync_school_indicator')
                 except HTTPError as exc:
                     if exc.code == 429:
-                        log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - {batch_context} 현재 배치까지 반영 후 중단')
+                        skipped_request_count += 1
+                        skip_indicator_code = params.get('indctId', '')
+                        record_school_indicator_skip(
+                            endpoint['path'],
+                            school['schl_id'],
+                            school['svy_yr'],
+                            skip_indicator_code,
+                            'HTTP 429',
+                        )
+                        log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - {batch_context} 요청 스킵 후 계속')
                         commit_cursor(cur)
-                        return
+                        time.sleep(SCHOOL_INDICATOR_429_COOLDOWN)
+                        continue
                     raise
                 for item in items:
                     upsert_school_indicator(cur, endpoint_name(endpoint['path']), item, params)
@@ -1252,7 +1372,46 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                 time.sleep(school_indicator_request_delay(endpoint['path']))
             processed_school_count += 1
             commit_cursor(cur)
-    log(f'sync-school-indicators batch completed {batch_context} processed_schools={processed_school_count}')
+    log(f'sync-school-indicators batch completed {batch_context} processed_schools={processed_school_count} skipped_requests={skipped_request_count}')
+
+
+def replay_school_indicator_skips(cur, endpoints, args):
+    rows = load_school_indicator_skip_rows(args.skip_tsv)
+    rows = dedupe_school_indicator_skip_rows(rows)
+    rows = filter_skip_rows(
+        rows,
+        endpoint_path=args.endpoint_path,
+        school_id=args.school_id,
+        svy_yr=args.svy_yr,
+        indicator_code=args.indicator_code,
+    )
+    if args.limit is not None and args.limit > 0:
+        rows = rows[:args.limit]
+    if not rows:
+        log('재처리할 skip TSV 대상이 없습니다')
+        return
+
+    processed_count = 0
+    for row in rows:
+        matched_endpoints = [endpoint for endpoint in endpoints if endpoint['path'] == row['endpoint_path']]
+        if not matched_endpoints:
+            log(f"skip TSV {row['line_no']}행 endpoint 미일치 - 건너뜀: {row['endpoint_path']}")
+            continue
+        log(
+            f"skip replay {processed_count + 1}/{len(rows)} "
+            f"{row['endpoint_path']} {row['school_id']}/{row['svy_yr']} indctId={row['indicator_code']}"
+        )
+        sync_school_indicators(
+            cur,
+            matched_endpoints,
+            args.scope,
+            school_id=row['school_id'],
+            svy_yr=row['svy_yr'],
+            indicator_code=row['indicator_code'],
+        )
+        processed_count += 1
+        commit_cursor(cur)
+    log(f'skip replay completed processed={processed_count} requested={len(rows)}')
 
 
 def sync_regional_indicators(cur, endpoints):
@@ -1339,10 +1498,19 @@ def run_job(args):
             elif args.job == 'sync-school-indicators':
                 sync_school_indicators(
                     cur,
-                    [e for e in endpoints if classify(e) == 'school_indicator'],
+                    filter_endpoints([e for e in endpoints if classify(e) == 'school_indicator'], args.endpoint_path),
                     args.scope,
                     school_offset=args.school_offset,
                     school_limit=args.school_limit,
+                    school_id=args.school_id,
+                    svy_yr=args.svy_yr,
+                    indicator_code=args.indicator_code,
+                )
+            elif args.job == 'replay-school-indicator-skips':
+                replay_school_indicator_skips(
+                    cur,
+                    [e for e in endpoints if classify(e) == 'school_indicator'],
+                    args,
                 )
             elif args.job == 'sync-regional-indicators':
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
@@ -1366,10 +1534,13 @@ def run_job(args):
                 )
                 sync_school_indicators(
                     cur,
-                    [e for e in endpoints if classify(e) == 'school_indicator'],
+                    filter_endpoints([e for e in endpoints if classify(e) == 'school_indicator'], args.endpoint_path),
                     args.scope,
                     school_offset=args.school_offset,
                     school_limit=args.school_limit,
+                    school_id=args.school_id,
+                    svy_yr=args.svy_yr,
+                    indicator_code=args.indicator_code,
                 )
                 sync_regional_indicators(cur, [e for e in endpoints if classify(e) == 'regional'])
                 sync_startup_support(
@@ -1396,6 +1567,7 @@ def build_parser():
             'sync-school-master',
             'sync-subject-master',
             'sync-school-indicators',
+            'replay-school-indicator-skips',
             'sync-regional-indicators',
             'sync-startup-support',
             'sync-all',
@@ -1420,12 +1592,45 @@ def build_parser():
         default=None,
         help='학교 배치 크기 (sync-subject-master, sync-school-indicators, sync-startup-support용)',
     )
+    parser.add_argument(
+        '--school-id',
+        default='',
+        help='특정 학교 ID만 실행 (주로 sync-school-indicators 복구용)',
+    )
+    parser.add_argument(
+        '--svy-yr',
+        default='',
+        help='특정 조사연도만 실행 (주로 sync-school-indicators 복구용)',
+    )
+    parser.add_argument(
+        '--endpoint-path',
+        default='',
+        help='특정 endpoint path만 실행 (예: /getComparisonFullTimeFacultyResearchCrntSt)',
+    )
+    parser.add_argument(
+        '--indicator-code',
+        default='',
+        help='특정 지표코드만 실행 (sync-school-indicators 복구용)',
+    )
+    parser.add_argument(
+        '--skip-tsv',
+        default='',
+        help='재처리할 skip TSV 경로 (replay-school-indicator-skips용)',
+    )
+    parser.add_argument(
+        '--limit',
+        type=int,
+        default=0,
+        help='재처리할 skip TSV 최대 건수 (replay-school-indicator-skips용)',
+    )
     return parser
 
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    if args.job == 'replay-school-indicator-skips' and args.skip_tsv == '':
+        args.skip_tsv = str(default_school_indicator_skip_tsv())
     run_job(args)
 
 

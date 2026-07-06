@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import json
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -12,6 +15,7 @@ from include.crawler_common import connect_db, ensure_dict, ensure_list, float_o
 
 BASE_DIR = Path(__file__).resolve().parent
 COLLECTION_PLAN_PATH = BASE_DIR / 'COLLECTION_PLAN.md'
+SYNC_JOB_DETAIL_LOG_NAME = 'sync_job_detail.log'
 
 
 CREATE_STATEMENTS = [
@@ -490,6 +494,64 @@ def ensure_tables():
                 cur.execute(statement)
     finally:
         conn.close()
+
+
+class TeeStream:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+        return len(data)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def stream_points_to_path(stream, target_path):
+    fileno = getattr(stream, 'fileno', None)
+    if fileno is None:
+        return False
+    try:
+        fd_no = fileno()
+    except OSError:
+        return False
+
+    for probe_path in (f'/proc/self/fd/{fd_no}', f'/dev/fd/{fd_no}'):
+        try:
+            resolved = os.path.realpath(probe_path)
+        except OSError:
+            continue
+        if resolved == str(target_path):
+            return True
+    return False
+
+
+@contextmanager
+def append_job_detail_log():
+    common.ensure_config_loaded()
+    common.ensure_dir(common.LOG_DIR)
+    target_path = Path(common.LOG_DIR) / SYNC_JOB_DETAIL_LOG_NAME
+    needs_stdout_tee = not stream_points_to_path(sys.stdout, target_path)
+    needs_stderr_tee = not stream_points_to_path(sys.stderr, target_path)
+    if not needs_stdout_tee and not needs_stderr_tee:
+        yield
+        return
+
+    with target_path.open('a', encoding='utf-8') as fp:
+        original_stdout = sys.stdout
+        original_stderr = sys.stderr
+        sys.stdout = TeeStream(original_stdout, fp) if needs_stdout_tee else original_stdout
+        sys.stderr = TeeStream(original_stderr, fp) if needs_stderr_tee else original_stderr
+        try:
+            yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
 
 
 def print_plan():
@@ -1248,8 +1310,13 @@ def replace_ability_rows(cur, jcode, rows):
 
 def replace_depart_rows(cur, jcode, rows):
     replace_detail_rows(cur, 'depart_list', jcode)
+    seen_depart_ids = set()
     for idx, row in enumerate(rows, start=1):
         depart_id = int_or_zero(first_text(row.get('depart_id'), row.get('id'), idx))
+        if depart_id in seen_depart_ids:
+            log(f'job {jcode}: depart_id 중복 스킵 {depart_id}')
+            continue
+        seen_depart_ids.add(depart_id)
         cur.execute(
             f"""
             INSERT INTO {common.DB_NAME}.depart_list (jcode, depart_id, depart_name, recv_time)
@@ -1444,7 +1511,8 @@ def main():
         sync_job_list(keyword=args.keyword, max_pages=args.max_pages)
         return
     if args.command == 'sync-job-detail':
-        sync_job_detail(seq=args.seq, limit=args.limit)
+        with append_job_detail_log():
+            sync_job_detail(seq=args.seq, limit=args.limit)
         return
     if args.command == 'sync-all':
         sync_all(args)
