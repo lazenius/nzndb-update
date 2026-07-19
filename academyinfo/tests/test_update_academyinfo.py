@@ -16,6 +16,16 @@ def load_module():
 
 
 class UpdateAcademyinfoTest(unittest.TestCase):
+    def test_startup_support_schema_has_school_year_index(self):
+        module = load_module()
+
+        self.assertTrue(any(
+            'CREATE TABLE IF NOT EXISTS' in statement
+            and 'startup_support_list' in statement
+            and 'KEY schl_year_idx (schl_id, svy_yr)' in statement
+            for statement in module.CREATE_STATEMENTS
+        ))
+
     def test_classify_series_system_as_metadata(self):
         module = load_module()
 
@@ -106,7 +116,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         ], visited)
         self.assertEqual(['commit', 'commit', 'commit'], commits)
 
-    def test_sync_school_indicators_commits_and_stops_on_429(self):
+    def test_sync_school_indicators_records_429_and_continues(self):
         module = load_module()
         visited = []
         commits = []
@@ -130,6 +140,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
 
         module.fetch_pages = fake_fetch
         module.upsert_school_indicator = lambda cur, api_id, item, params: None
+        module.record_school_indicator_skip = lambda *args: None
         module.log = lambda message: logs.append(message)
         module.commit_cursor = lambda cur: commits.append('commit')
 
@@ -140,9 +151,10 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         )
 
         self.assertEqual(['0001', '0002'], visited)
-        self.assertEqual(['commit', 'commit'], commits)
+        self.assertEqual(['commit', 'commit', 'commit'], commits)
         self.assertIn('sync-school-indicators batch offset=0 limit=all count=2', logs)
-        self.assertIn('/getComparisonLibraryBudgetCrntSt 0002/2025 HTTP 429 - offset=0 limit=all count=2 현재 배치까지 반영 후 중단', logs)
+        self.assertIn('/getComparisonLibraryBudgetCrntSt 0002/2025 HTTP 429 - offset=0 limit=all count=2 요청 스킵 후 계속', logs)
+        self.assertIn('sync-school-indicators batch completed offset=0 limit=all count=2 processed_schools=2 skipped_requests=1', logs)
 
     def test_sync_school_indicators_throttles_each_request(self):
         module = load_module()
@@ -193,7 +205,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         self.assertEqual([
             ('/getComparisonLibraryBudgetCrntSt', '0002'),
         ], visited)
-        self.assertIn('sync-school-indicators batch completed offset=1 limit=1 count=1 processed_schools=1', logs)
+        self.assertIn('sync-school-indicators batch completed offset=1 limit=1 count=1 processed_schools=1 skipped_requests=0', logs)
 
     def test_sync_startup_support_uses_school_batch(self):
         module = load_module()
@@ -205,7 +217,7 @@ class UpdateAcademyinfoTest(unittest.TestCase):
             {'schl_id': '0003', 'svy_yr': '2025', 'name': '학교3'},
         ]
         module.fetch_pages = lambda endpoint, params, job_name: visited.append((endpoint['path'], params['schlId'])) or []
-        module.insert_startup_support = lambda cur, api_id, item, params, seq_no: None
+        module.insert_startup_support = lambda cur, rows: None
         module.log = lambda message: None
 
         module.sync_startup_support(
@@ -219,6 +231,33 @@ class UpdateAcademyinfoTest(unittest.TestCase):
         self.assertEqual([
             ('/getStupEdcSuptCstt', '0002'),
         ], visited)
+
+    def test_insert_startup_support_batches_rows(self):
+        module = load_module()
+        batches = []
+
+        class Cursor:
+            def executemany(self, query, rows):
+                batches.append(rows)
+
+        rows = [('api', 'school', '2025', 'indicator', '2025', index, 'key', 'value') for index in range(2501)]
+        module.insert_startup_support(Cursor(), rows, batch_size=1000)
+
+        self.assertEqual([1000, 1000, 501], [len(batch) for batch in batches])
+
+    def test_build_startup_support_rows_flattens_item(self):
+        module = load_module()
+
+        rows = module.build_startup_support_rows(
+            'api',
+            {'schlId': '0001', 'svyYr': '2025', 'indctId': 'indicator', 'field': 'value'},
+            {},
+            3,
+        )
+
+        self.assertEqual(4, len(rows))
+        self.assertEqual(('api', '0001', '2025', 'indicator'), rows[0][:4])
+        self.assertEqual(3, rows[0][5])
 
 
 if __name__ == '__main__':

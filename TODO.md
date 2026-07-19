@@ -1,10 +1,10 @@
 <!-- 다음 세션 시작 메모 — 자동 생성, 수동 편집 금지 -->
-> **마지막 세션:** 2026-06-27 | 커밋 `(현재 HEAD)`
+> **마지막 세션:** 2026-07-20 | 커밋 `(이번 ship 커밋)`
 >
 > **완료한 작업:**
-> - career 적성검사 v2 메타 캐시 수집기 및 서버 cron 추가
-> - academyinfo school_indicator 실측 기반 롤링 cron 재설계
-> - 서버 수동 스모크/실측 및 로그 마스킹 검증
+> - academyinfo 창업지원 적재 1,000행 배치화
+> - startup_support_list 학교·연도 조회 인덱스 반영
+> - 학교지표 429 계속 처리 테스트 계약 정비
 >
 > **남은 작업:**
 > - 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
@@ -52,6 +52,7 @@
 - [ ] robocode-admin/db 서버본을 로컬에도 동기화
 - [ ] nznlab/db/career, academyinfo 서버본을 로컬에도 동기화
 ## 완료
+- [x] 2026-07-20 academyinfo 창업지원 적재 배치화 및 startup_support_list 학교·연도 인덱스 반영
 - [x] 2026-07-06 academyinfo skip TSV 재처리 커맨드 설계/구현 및 서버 스모크 검증
 - [x] 2026-07-06 career sync-job-detail 수동 실행 로그 파일 append 정리 및 서버 검증
 - [x] 2026-07-06 [버그] career sync-job-detail 월배치 중 `Duplicate entry '173-318'` 무결성 오류로 중단

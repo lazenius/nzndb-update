@@ -224,6 +224,7 @@ CREATE_STATEMENTS = [
         item_value varchar(300) NOT NULL,
         recv_time datetime NOT NULL,
         PRIMARY KEY (api_id, schl_id, svy_yr, indct_id, seq, item_key),
+        KEY schl_year_idx (schl_id, svy_yr),
         KEY indct_id_idx (indct_id),
         KEY item_key_idx (item_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -867,34 +868,39 @@ def upsert_regional_indicator(cur, api_id, item, params):
     )
 
 
-def insert_startup_support(cur, api_id, item, params, seq_no):
+def build_startup_support_rows(api_id, item, params, seq_no):
     schl_id = first_non_empty(value_or_default(item, 'schlId'), text(params.get('schlId')))
     svy_yr = first_non_empty(value_or_default(item, 'svyYr'), text(params.get('svyYr')))
     indct_id = first_non_empty(value_or_default(item, 'indctId'), api_id)
     if schl_id == '' or svy_yr == '':
-        return
+        return []
 
+    rows = []
     for key, value in item.items():
-        cur.execute(
-            f"""
+        rows.append((
+            api_id,
+            schl_id,
+            svy_yr,
+            indct_id,
+            value_or_default(item, 'indctYr'),
+            seq_no,
+            key,
+            text(value)[:300],
+        ))
+    return rows
+
+
+def insert_startup_support(cur, rows, batch_size=1000):
+    query = f"""
             INSERT INTO {common.DB_NAME}.startup_support_list
             (api_id, schl_id, svy_yr, indct_id, indct_yr, seq, item_key, item_value, recv_time)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON DUPLICATE KEY UPDATE
                 item_value=VALUES(item_value),
                 recv_time=VALUES(recv_time)
-            """,
-            (
-                api_id,
-                schl_id,
-                svy_yr,
-                indct_id,
-                value_or_default(item, 'indctYr'),
-                seq_no,
-                key,
-                text(value)[:300],
-            ),
-        )
+            """
+    for offset in range(0, len(rows), batch_size):
+        cur.executemany(query, rows[offset:offset + batch_size])
 
 
 def load_years(cur, scope='latest'):
@@ -1452,8 +1458,10 @@ def sync_startup_support(cur, endpoints, scope, school_offset=0, school_limit=No
                 'schlId': school['schl_id'],
             }
             items = fetch_pages(endpoint, params, 'sync_startup_support')
+            rows = []
             for idx, item in enumerate(items, start=1):
-                insert_startup_support(cur, endpoint_name(endpoint['path']), item, params, idx)
+                rows.extend(build_startup_support_rows(endpoint_name(endpoint['path']), item, params, idx))
+            insert_startup_support(cur, rows)
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
