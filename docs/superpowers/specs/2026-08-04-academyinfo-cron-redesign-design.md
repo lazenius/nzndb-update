@@ -65,8 +65,20 @@ offset=9 배치의 skip 475건 × 180초 = 23.75시간. 총 소요 31시간 27�
 `timeout` · `flock` 은 증상 억제다. 한 달치 전량(378학교 × 약 244요청 ≈ 92,000 요청,
 순수 약 36시간 분량)을 20시간 창에 밀어넣은 **스케줄 설계 자체가 원인**이다.
 
-또한 단독 실행이던 offset=0 배치의 skip은 0건이었다. **429는 중첩의 결과지 원인이 아니다.**
-직렬화만으로 429 대부분이 사라질 것으로 본다.
+또한 단독 실행이던 offset=0 배치(08-03 02:10)의 skip은 0건이었다.
+
+> **2026-08-04 20:00 스모크로 정정.** 위 관찰만 보고 "429는 중첩의 결과지 원인이 아니다"라고
+> 판단했으나 틀렸다. 중첩이 전혀 없는 `--stale-limit 1` 단독 실행에서도 429가 계속 발생했다
+> (17분간 반영 14 / skip 18, 전부 `getComparisonFullTimeFacultyResearchCrntSt` 의 indctId 요청).
+>
+> 정확한 진술은 이렇다. **중첩은 RDS 고갈의 원인이 맞지만, 429는 중첩과 무관하게도 발생한다.**
+> 02:10 야간 배치가 skip 0건이었던 것은 중첩이 없어서가 아니라 **시간대 차이**로 보인다.
+> OpenAPI 쪽에 시간대별 부하 또는 쿼터 제한이 별도로 존재한다.
+>
+> 설계에 미치는 영향은 제한적이다. skip 기록 + replay 구조가 이 경우를 이미 커버하고,
+> `--max-consecutive-skips` 와 `timeout` 이 런타임 상한을 준다. 다만 **야간 실행에서도 429
+> 비율이 높다면 `--stale-limit 13` 이 74분을 넘길 수 있다.** 첫 실실행 로그로 재조정한다
+> (§8 검증 항목).
 
 ---
 
@@ -199,8 +211,12 @@ LIMIT N
 ### 5.2 동시성 가드
 
 ```
-flock -n /var/lock/academyinfo-school-indicator.lock
+flock -n /var/www/html/update/.locks/academyinfo-school-indicator.lock
 ```
+
+락 파일은 `/var/lock` 이 아니라 프로젝트 하위 `.locks/` 에 둔다. `/var/lock`(→ `/run/lock`)은
+`drwxr-xr-x root root` 라 ec2-user가 파일을 만들 수 없다(실측: `flock: cannot open lock file
+... Permission denied`, exit 66). `.locks/` 는 `.gitignore` 에 추가한다.
 
 - 일일 indicator 잡과 replay 잡이 **같은 락**을 공유한다. indicator 가 초과 실행 중이면
   replay 는 자동으로 건너뛴다.
@@ -277,9 +293,13 @@ crond (04:10)
 
 ## 8. 검증 (DoD)
 
-**등록 전:**
-- `--stale-limit 1` 스모크 실행 1회. 선정 학교가 실제로 `recv_time` 최소인지 확인.
-- `flock` 이중 실행 테스트 — 두 번째가 즉시 종료되는지 확인.
+**등록 전 (2026-08-04 완료):**
+- [x] 단위 테스트 19건 통과 (신규 12건 포함)
+- [x] `flock` 이중 실행 테스트 — 두 번째가 exit 1로 즉시 종료
+- [x] 인자 검증 4케이스 — `--stale-limit` 와 offset/limit 동시 사용, 타 job 사용, 0 이하, 기존 경로
+- [x] `--stale-limit 1` 스모크 — 최오래된 학교 `0000004/2025` 선정, 14개 엔드포인트 적재,
+      429 skip 18건 TSV 기록, 락 정상 해제
+- [ ] 연속 skip 중단 실발동은 미검증 (단위 테스트로만 확인)
 
 **등록 후 7일 관찰:**
 - 일 1회만 실행되었는가
