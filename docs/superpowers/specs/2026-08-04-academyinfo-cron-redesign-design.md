@@ -150,8 +150,11 @@ offset=9 배치의 skip 475건 × 180초 = 23.75시간. 총 소요 31시간 27�
 | 01:50 | 매월 5일 | career `sync-aptitude-meta` | 5초 |
 | 01:55 | 매월 4일 | academyinfo `sync-regional-indicators` | 2분 |
 | **02:30** | **매일** | **academyinfo `sync-school-indicators --stale-limit 13`** | **74분 → 약 03:45** |
-| 04:10 | 매일 | academyinfo `replay-school-indicator-skips` | 30분 이하 |
+| 04:10 | 매일 | academyinfo `replay-school-indicator-skips --limit 500` | 약 17분 |
 | 05:00 | 매월 5일 | academyinfo `sync-startup-support` | 115분 → 약 06:55 |
+
+`--skip-tsv` 는 생략 시 `default_school_indicator_skip_tsv()` 가 자동 적용된다.
+replay 1건당 약 2초이므로 `--limit 500` 이면 약 17분이다. `timeout -k 60 1800` 을 건다.
 
 경부하 잡은 전부 02:00 이전에 끝나고, 무거운 두 잡(02:30·05:00)은 서로 겹치지 않는다.
 04:10 replay 는 02:30 잡이 정상 종료(03:45)한 뒤에 시작한다.
@@ -162,8 +165,12 @@ offset=9 배치의 skip 475건 × 180초 = 23.75시간. 총 소요 31시간 27�
 
 ### 5.1 대상 선정 — `load_stale_schools`
 
-신규 CLI 인자 `--stale-limit N`. 기존 `--school-offset` / `--school-limit` 은
-수동 실행·디버깅용으로 존치한다. 세 인자는 상호 배타로 검증한다.
+신규 CLI 인자 `--stale-limit N`. **`sync-school-indicators` 전용이다.**
+`sync-subject-master` · `sync-startup-support` 도 `--school-offset` / `--school-limit` 을
+받지만 이번 변경 대상이 아니며 동작이 바뀌지 않는다.
+
+기존 `--school-offset` / `--school-limit` 은 수동 실행·디버깅용으로 존치한다.
+`--stale-limit` 과 `--school-offset` / `--school-limit` 을 함께 주면 인자 오류로 종료한다.
 
 ```sql
 SELECT s.schl_id, s.svy_yr, s.name, s.div_cd
@@ -206,8 +213,10 @@ flock -n /var/lock/academyinfo-school-indicator.lock
 
 - `SCHOOL_INDICATOR_429_COOLDOWN` 을 **180초 → 5초**로 낮춘다.
 - 429는 기존대로 skip TSV에 기록하고 다음 요청으로 진행한다.
-- 신규 인자 `--max-consecutive-skips` (기본 50). 연속 skip이 이 값을 넘으면 run을 중단하고
-  종료 사유를 로그에 남긴다. OpenAPI 장애 시 무의미한 호출을 막는다.
+- 신규 인자 `--max-consecutive-skips` (기본 50). **연속 카운터는 요청 1건이라도 성공하면
+  0으로 리셋된다.** 학교·endpoint 경계와 무관하게 run 전체에서 하나의 카운터를 쓴다.
+  임계값을 넘으면 run을 중단하고 종료 사유를 로그에 남긴다. OpenAPI 장애 시 무의미한
+  호출을 막는 장치이며, 정상 상태에서는 발동하지 않는다(단독 실행 시 skip 0건 실측).
 - 밀린 skip은 04:10 replay 슬롯이 소화한다.
 
 ### 5.4 로그
