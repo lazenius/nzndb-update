@@ -1,17 +1,21 @@
 <!-- 다음 세션 시작 메모 — 자동 생성, 수동 편집 금지 -->
-> **마지막 세션:** 2026-07-20 | 커밋 `b2d0a90`
+> **마지막 세션:** 2026-08-05 | 커밋 `55ea5f8`
 >
 > **완료한 작업:**
-> - academyinfo 창업지원 적재 1,000행 배치화
-> - startup_support_list 학교·연도 조회 인덱스 반영
-> - 학교지표 429 계속 처리 테스트 계약 정비
+> - RDS 커넥션 고갈 장애 원인 규명 — 배치 1회 51분 > 크론 간격 30분으로 구조적 중첩, 27 프로세스 동시 실행 → `(1040) Too many connections`
+> - school-indicators 를 stale-first 롤링으로 전환 (`--stale-limit`, `recv_time` 최오래된 순, 하루 13학교 ≈ 월 1회전)
+> - 429 이중 백오프 제거 (180초 → 5초) + `--max-consecutive-skips` 로 런타임 상한
+> - 크론 14슬롯 재배치, 전 잡 `flock -n` 적용, 경부하 잡을 01:00~01:55 로 분리
+> - logrotate `/etc/logrotate.d/nzndb-update` 설치, 7.5MB 폭주 잔재 1회 강제 회전
+> - 커버링 인덱스는 실측(4,922행·17.3ms) 후 순손실 판단하여 철회
 >
 > **남은 작업:**
-> - 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
-> - [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 롤링 cron 배치 안정화
+> - 서버 `nzndb-update` push 미승인 상태 — 서버 커밋 `a432584` 가 로컬에만 있음
+> - 첫 실실행(02:30/04:10) 로그로 `--stale-limit 13` 재튜닝 — 74분 추정 대비, 야간 429 비율
+> - 서버 career, academyinfo 수집/DB 구축 계속 개발, 실유입 검증
 > - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
 >
-> **다음에 시작할 곳:** academyinfo school_indicator 롤링 cron 첫 실실행 결과와 robocode-admin batch 로그 기준 반영
+> **다음에 시작할 곳:** 첫 실실행 로그 확인 후 `--stale-limit` 확정. RDS `max_connections` 확대·`MAX_USER_CONNECTIONS` 계정 격리는 설계문서 §11 후속 권고(별도 승인 필요).
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
@@ -21,7 +25,8 @@
 - [x] 2026-06-30 ECC 플러그인 설치 및 Codex 인식 확인
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
-- [ ] [버그] academyinfo school_indicator_list 수집 시 OpenAPI HTTP 429 완화 및 롤링 cron 배치 안정화
+- [ ] 서버 nzndb-update 커밋 `a432584` push (미승인 상태)
+- [ ] academyinfo school_indicator 첫 실실행 로그로 `--stale-limit 13` 재튜닝
 - [ ] (나중에) academyinfo school_indicator 롤링 cron 첫 실실행 후 batch 로그/누락 건수 검증
 - [ ] (나중에) robocode-admin school_indicator 모니터링 로그 기준을 a~d 에서 batch 로 변경
 - [ ] (나중에) career sync-subject-detail 월배치 첫 실실행 후 로그/적재 건수 검증
@@ -52,6 +57,7 @@
 - [ ] robocode-admin/db 서버본을 로컬에도 동기화
 - [ ] nznlab/db/career, academyinfo 서버본을 로컬에도 동기화
 ## 완료
+- [x] 2026-08-05 [버그] academyinfo school_indicator_list OpenAPI HTTP 429 완화 및 롤링 cron 배치 안정화 — RDS 커넥션 고갈 장애 원인 규명, stale-first 롤링 전환, flock 도입, 크론 14슬롯 재배치, logrotate 설치
 - [x] 2026-07-20 academyinfo 창업지원 적재 배치화 및 startup_support_list 학교·연도 인덱스 반영
 - [x] 2026-07-06 academyinfo skip TSV 재처리 커맨드 설계/구현 및 서버 스모크 검증
 - [x] 2026-07-06 career sync-job-detail 수동 실행 로그 파일 append 정리 및 서버 검증
