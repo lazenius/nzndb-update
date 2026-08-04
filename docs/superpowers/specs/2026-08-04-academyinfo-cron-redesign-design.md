@@ -205,8 +205,25 @@ LIMIT N
 
 미수집 학교가 먼저, 그다음 오래된 순. 동률은 `schl_id` 로 안정 정렬한다.
 
-**인덱스:** `school_indicator_list` 에 커버링 인덱스 `(schl_id, recv_time)` 추가.
-현재는 `schl_id_idx (schl_id)` 단독이라 `MAX(recv_time)` 집계에서 행 접근이 발생한다.
+**인덱스: 추가하지 않는다 (2026-08-05 실측 후 철회).**
+
+설계 시점에는 커버링 인덱스 `(schl_id, recv_time)` 추가를 계획했다. `schl_id_idx (schl_id)`
+단독이라 `MAX(recv_time)` 집계에서 행 접근이 발생한다는 이유였다. 실행 직전 테이블 규모를
+읽기 전용으로 재보니 전제가 틀렸다.
+
+| 항목 | 실측값 |
+|---|---|
+| 행수 | 4,922 (data 2MB / index 4MB) |
+| 실행계획 | `type=index`, `key=schl_id_idx`, `rows=4922` |
+| 소요 | **17.3ms** |
+| 실행 빈도 | 1일 1회 |
+
+하루 한 번 17ms 쿼리를 위해 인덱스를 더하면, 기존 4MB 인덱스에 얹는 것에 더해 매
+`INSERT ... ON DUPLICATE KEY UPDATE` 마다 유지 비용이 붙는다. 공유 RDS에 DDL을 거는
+리스크까지 감안하면 순손실이다. 테이블이 10만 행대로 커지면 재검토한다.
+
+부수 확인: `schl_id` distinct 333 vs 학교 마스터 378 → 45개 학교는 미수집 상태다.
+`last_recv IS NULL` 이 최우선 정렬이므로 첫 실행부터 이 45개가 먼저 처리된다.
 
 ### 5.2 동시성 가드
 
@@ -240,15 +257,25 @@ flock -n /var/www/html/update/.locks/academyinfo-school-indicator.lock
 현재 무제한 append 구조다 (35시간에 7.8MB). `/etc/logrotate.d/nzndb-update` 를 추가한다.
 
 ```
-/var/www/html/update/*/logs/*.log {
+/var/www/html/update/academyinfo/logs/*.log /var/www/html/update/career/logs/*.log {
     daily
     rotate 14
     compress
+    delaycompress
     missingok
     notifempty
     copytruncate
+    su ec2-user ec2-user
 }
 ```
+
+`*/logs/*.log` 와일드카드 대신 두 경로를 명시했다. `update/` 하위에 다른 디렉터리가
+생겼을 때 의도치 않게 회전 대상에 들어가는 것을 막는다. 로그 소유자가 `ec2-user` 이므로
+`su ec2-user ec2-user` 로 회전 작업 권한을 맞춘다.
+
+**설치 완료 (2026-08-05).** `logrotate --debug` 로 21개 로그 인식과 euid 전환을 확인했고,
+폭주 시절 잔재인 7.5MB `sync_school_indicator_batch.log` 는 `-f` 로 1회 강제 회전해
+`.1` 로 분리했다 (`copytruncate` 이므로 무손실). 새 스케줄 첫 실행 로그는 빈 파일에서 시작한다.
 
 ---
 
