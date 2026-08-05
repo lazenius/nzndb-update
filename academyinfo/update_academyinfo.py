@@ -4,6 +4,7 @@ import hashlib
 import re
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -14,13 +15,29 @@ from include.common import connect_db, fetch_xml, first_non_empty, int_or_zero, 
 BASE_DIR = Path(__file__).resolve().parent
 API_SPEC_PATH = BASE_DIR / 'API_SPEC.md'
 
-SCHOOL_INDICATOR_REQUEST_DELAY = 0.6
-SCHOOL_INDICATOR_DELAY_BY_ENDPOINT = {
-    '/getComparisonFullTimeFacultyResearchCrntSt': 3.0,
-    '/getNoticeFullTimeFacultyResearchCrntSt': 2.0,
-}
-SCHOOL_INDICATOR_429_COOLDOWN = 180
+# 실측: API 응답 자체는 콜당 0.131초. 429는 버스트가 아니라 일일 한도 소진에서만 나온다
+# (83콜 연속 10.5초, 약 8 rps에서 429 없음). 과거 0.6/3.0초는 한도 문제를 버스트로 오진한 값.
+SCHOOL_INDICATOR_REQUEST_DELAY = 0.1
+SCHOOL_INDICATOR_DELAY_BY_ENDPOINT = {}
+# 한도 소진 후 재시도는 무의미하므로 짧게만 쉰다. 반복 차단은 아래 서킷 브레이커가 담당.
+SCHOOL_INDICATOR_429_COOLDOWN = 2
+# 연속 skip이 이 값을 넘으면 run을 중단한다. OpenAPI 장애 시 무의미한 호출 방지용.
+SCHOOL_INDICATOR_MAX_CONSECUTIVE_SKIPS = 50
+# 한 엔드포인트에서 연속 429가 이 값에 도달하면 해당 엔드포인트만 이번 run에서 포기한다.
+# (일일 한도 소진은 그날 안에 회복되지 않으므로 계속 두드릴 이유가 없다)
+SCHOOL_INDICATOR_ENDPOINT_429_BREAKER = 5
 SCHOOL_INDICATOR_SKIP_LOG_NAME = 'sync_school_indicator_skips.tsv'
+
+# OpenAPI 일일 한도는 엔드포인트(오퍼레이션)당 1,000회. 안전마진 10%를 빼고 운용한다.
+SCHOOL_INDICATOR_ENDPOINT_CALL_BUDGET = 900
+
+# indctId가 필수인 엔드포인트는 code_list의 key_indicator 83개를 전부 곱하면 한도를 넘긴다.
+# 실측으로 데이터가 존재하는 코드만 남긴다 (학교를 바꿔도 동일 — 0000003/0000005 스윕 확인).
+# 지표 54~60은 indctId 없이 한 번에 7건을 주는 getNotice...ResearchCrntSt 쪽에서 들어온다.
+SCHOOL_INDICATOR_ENDPOINT_CODES = {
+    '/getComparisonFullTimeFacultyResearchCrntSt': ('66', '67'),
+    '/getComparisonFullTimeFacultyEnsureCrntSt': ('66', '67'),
+}
 
 
 CODE_TYPE_MAP = {
@@ -176,6 +193,16 @@ CREATE_STATEMENTS = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     f"""
+    CREATE TABLE IF NOT EXISTS {common.DB_NAME}.school_indicator_attempt (
+        api_id varchar(80) NOT NULL,
+        schl_id varchar(20) NOT NULL,
+        svy_yr char(4) NOT NULL,
+        attempt_time datetime NOT NULL,
+        PRIMARY KEY (api_id, schl_id, svy_yr),
+        KEY api_attempt_idx (api_id, attempt_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    f"""
     CREATE TABLE IF NOT EXISTS {common.DB_NAME}.regional_indicator_list (
         api_id varchar(80) NOT NULL,
         indct_id varchar(30) NOT NULL,
@@ -224,7 +251,6 @@ CREATE_STATEMENTS = [
         item_value varchar(300) NOT NULL,
         recv_time datetime NOT NULL,
         PRIMARY KEY (api_id, schl_id, svy_yr, indct_id, seq, item_key),
-        KEY schl_year_idx (schl_id, svy_yr),
         KEY indct_id_idx (indct_id),
         KEY item_key_idx (item_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -868,39 +894,34 @@ def upsert_regional_indicator(cur, api_id, item, params):
     )
 
 
-def build_startup_support_rows(api_id, item, params, seq_no):
+def insert_startup_support(cur, api_id, item, params, seq_no):
     schl_id = first_non_empty(value_or_default(item, 'schlId'), text(params.get('schlId')))
     svy_yr = first_non_empty(value_or_default(item, 'svyYr'), text(params.get('svyYr')))
     indct_id = first_non_empty(value_or_default(item, 'indctId'), api_id)
     if schl_id == '' or svy_yr == '':
-        return []
+        return
 
-    rows = []
     for key, value in item.items():
-        rows.append((
-            api_id,
-            schl_id,
-            svy_yr,
-            indct_id,
-            value_or_default(item, 'indctYr'),
-            seq_no,
-            key,
-            text(value)[:300],
-        ))
-    return rows
-
-
-def insert_startup_support(cur, rows, batch_size=1000):
-    query = f"""
+        cur.execute(
+            f"""
             INSERT INTO {common.DB_NAME}.startup_support_list
             (api_id, schl_id, svy_yr, indct_id, indct_yr, seq, item_key, item_value, recv_time)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON DUPLICATE KEY UPDATE
                 item_value=VALUES(item_value),
                 recv_time=VALUES(recv_time)
-            """
-    for offset in range(0, len(rows), batch_size):
-        cur.executemany(query, rows[offset:offset + batch_size])
+            """,
+            (
+                api_id,
+                schl_id,
+                svy_yr,
+                indct_id,
+                value_or_default(item, 'indctYr'),
+                seq_no,
+                key,
+                text(value)[:300],
+            ),
+        )
 
 
 def load_years(cur, scope='latest'):
@@ -968,6 +989,82 @@ def load_schools(cur, scope='latest'):
     return cur.fetchall()
 
 
+def load_school_last_recv(cur):
+    """학교별 school_indicator_list 마지막 수집 시각을 조회한다."""
+    cur.execute(
+        f"""
+        SELECT schl_id, MAX(recv_time) AS last_recv
+        FROM {common.DB_NAME}.school_indicator_list
+        GROUP BY schl_id
+        """
+    )
+    return {str(row['schl_id']): row['last_recv'] for row in cur.fetchall()}
+
+
+def load_endpoint_last_attempt(cur, api_id):
+    """엔드포인트별 학교 마지막 시도 시각을 조회한다.
+
+    school_indicator_list의 recv_time은 '행이 적재된 학교'만 갱신되므로, 데이터가 없어
+    0건이 오는 학교는 영원히 최우선으로 남아 회전이 멈춘다(2026-08-05 실측된 livelock).
+    적재 여부와 무관하게 시도 자체를 기록하는 이 대장으로 순번을 돌린다.
+    """
+    cur.execute(
+        f"""
+        SELECT schl_id, attempt_time
+        FROM {common.DB_NAME}.school_indicator_attempt
+        WHERE api_id=%s
+        """,
+        (api_id,),
+    )
+    return {str(row['schl_id']): row['attempt_time'] for row in cur.fetchall()}
+
+
+def record_endpoint_attempt(cur, api_id, school_id, svy_yr):
+    cur.execute(
+        f"""
+        INSERT INTO {common.DB_NAME}.school_indicator_attempt
+            (api_id, schl_id, svy_yr, attempt_time)
+        VALUES (%s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE attempt_time=VALUES(attempt_time)
+        """,
+        (api_id, str(school_id), str(svy_yr)),
+    )
+
+
+def order_schools_by_attempt(schools, attempt_map):
+    """미시도 학교 우선, 그다음 시도가 오래된 순으로 정렬한다."""
+    def sort_key(school):
+        attempted = attempt_map.get(str(school['schl_id']))
+        return (attempted is not None, attempted or datetime.min, str(school['schl_id']))
+
+    return sorted(schools, key=sort_key)
+
+
+def endpoint_indicator_codes(endpoint_path, indicator_codes):
+    """엔드포인트에 실제로 데이터가 있는 indctId만 남긴다 (화이트리스트 미등록은 전체 사용)."""
+    allowed = SCHOOL_INDICATOR_ENDPOINT_CODES.get(endpoint_path)
+    if not allowed:
+        return indicator_codes
+    return [code for code in indicator_codes if code in allowed]
+
+
+def select_stale_schools(schools, last_recv_map, stale_limit):
+    """수집이 가장 오래된 학교부터 stale_limit개를 고른다.
+
+    미수집 학교가 최우선, 그다음 recv_time 오래된 순, 동률은 schl_id로 안정 정렬.
+    실행이 중단되거나 429로 빠진 학교는 recv_time이 낡은 채로 남아 다음 실행에서
+    다시 선정되므로 별도 커서 없이 자가 치유된다.
+    """
+    if stale_limit < 1:
+        raise ValueError('stale_limit는 1 이상이어야 합니다')
+
+    def sort_key(school):
+        last_recv = last_recv_map.get(str(school['schl_id']))
+        return (last_recv is not None, last_recv or datetime.min, str(school['schl_id']))
+
+    return sorted(schools, key=sort_key)[:stale_limit]
+
+
 def slice_schools(schools, school_offset=0, school_limit=None):
     if school_offset < 0:
         raise ValueError('school_offset는 0 이상이어야 합니다')
@@ -1020,9 +1117,11 @@ def filter_skip_rows(rows, endpoint_path='', school_id='', svy_yr='', indicator_
     return filtered
 
 
-def school_batch_context(school_offset=0, school_limit=None, school_count=None):
-    limit_text = 'all' if school_limit is None else str(school_limit)
+def school_batch_context(school_offset=0, school_limit=None, school_count=None, stale_limit=None):
     count_text = '?' if school_count is None else str(school_count)
+    if stale_limit is not None:
+        return f'stale={stale_limit} count={count_text}'
+    limit_text = 'all' if school_limit is None else str(school_limit)
     return f'offset={school_offset} limit={limit_text} count={count_text}'
 
 
@@ -1323,7 +1422,7 @@ def sync_subject_master(cur, endpoints, scope, school_offset=0, school_limit=Non
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
-def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=None, school_id='', svy_yr='', indicator_code=''):
+def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=None, school_id='', svy_yr='', indicator_code='', stale_limit=None, max_consecutive_skips=SCHOOL_INDICATOR_MAX_CONSECUTIVE_SKIPS):
     schools = load_schools(cur, scope=scope)
     indicator_codes = filter_indicator_codes(load_indicator_codes(cur), indicator_code=indicator_code)
     if not schools:
@@ -1331,34 +1430,66 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
     schools = filter_schools(schools, school_id=school_id, svy_yr=svy_yr)
     if not schools:
         raise RuntimeError('조건에 맞는 school_list가 없습니다. school_id/svy_yr 확인 필요')
-    schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
+    if stale_limit is not None:
+        schools = select_stale_schools(schools, load_school_last_recv(cur), stale_limit)
+    else:
+        schools = slice_schools(schools, school_offset=school_offset, school_limit=school_limit)
     batch_context = school_batch_context(
         school_offset=school_offset,
         school_limit=school_limit,
         school_count=len(schools),
+        stale_limit=stale_limit,
     )
     processed_school_count = 0
     skipped_request_count = 0
+    consecutive_skip_count = 0
     log(f'sync-school-indicators batch {batch_context}')
 
+    aborted = False
     for endpoint in endpoints:
-        for school in schools:
+        if aborted:
+            break
+        api_id = endpoint_name(endpoint['path'])
+        endpoint_codes = endpoint_indicator_codes(endpoint['path'], indicator_codes)
+        fan_out = len(endpoint_codes) if 'indctId' in endpoint['required_params'] else 1
+        if fan_out < 1:
+            log(f'{endpoint["path"]} 유효 indctId 없음 - 엔드포인트 건너뜀')
+            continue
+
+        # 엔드포인트 단위 일일 한도(1,000회) 안에서만 돈다. 예산으로 전 학교를 못 덮으면
+        # 시도가 오래된 학교부터 처리하고, 나머지는 다음 실행이 이어받는다.
+        endpoint_schools = schools
+        max_schools = SCHOOL_INDICATOR_ENDPOINT_CALL_BUDGET // fan_out
+        if max_schools < len(schools):
+            endpoint_schools = order_schools_by_attempt(schools, load_endpoint_last_attempt(cur, api_id))[:max_schools]
+            log(
+                f'{endpoint["path"]} 일일 예산 {SCHOOL_INDICATOR_ENDPOINT_CALL_BUDGET}회 / 학교당 {fan_out}회 '
+                f'-> {len(endpoint_schools)}개교만 처리 (시도 오래된 순)'
+            )
+
+        endpoint_429_streak = 0
+        for school in endpoint_schools:
+            if aborted or endpoint_429_streak >= SCHOOL_INDICATOR_ENDPOINT_429_BREAKER:
+                break
             base_params = {
                 'serviceKey': common.SERVICE_KEY,
                 'svyYr': school['svy_yr'],
                 'schlId': school['schl_id'],
             }
             if 'indctId' in endpoint['required_params']:
-                param_sets = [dict(base_params, indctId=code) for code in indicator_codes]
+                param_sets = [dict(base_params, indctId=code) for code in endpoint_codes]
             else:
                 param_sets = [base_params]
 
+            school_call_ok = False
             for params in param_sets:
                 try:
                     items = fetch_pages(endpoint, params, 'sync_school_indicator')
                 except HTTPError as exc:
                     if exc.code == 429:
                         skipped_request_count += 1
+                        consecutive_skip_count += 1
+                        endpoint_429_streak += 1
                         skip_indicator_code = params.get('indctId', '')
                         record_school_indicator_skip(
                             endpoint['path'],
@@ -1369,16 +1500,31 @@ def sync_school_indicators(cur, endpoints, scope, school_offset=0, school_limit=
                         )
                         log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} HTTP 429 - {batch_context} 요청 스킵 후 계속')
                         commit_cursor(cur)
+                        if max_consecutive_skips > 0 and consecutive_skip_count >= max_consecutive_skips:
+                            log(f'연속 skip {consecutive_skip_count}건 도달 - run 중단 {batch_context}')
+                            aborted = True
+                            break
+                        if endpoint_429_streak >= SCHOOL_INDICATOR_ENDPOINT_429_BREAKER:
+                            log(f'{endpoint["path"]} 연속 429 {endpoint_429_streak}건 - 일일 한도 소진으로 보고 이 엔드포인트 중단')
+                            break
                         time.sleep(SCHOOL_INDICATOR_429_COOLDOWN)
                         continue
                     raise
+                consecutive_skip_count = 0
+                endpoint_429_streak = 0
+                school_call_ok = True
                 for item in items:
                     upsert_school_indicator(cur, endpoint_name(endpoint['path']), item, params)
                 log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
                 time.sleep(school_indicator_request_delay(endpoint['path']))
+            # 0건 응답도 '시도함'으로 기록해야 회전이 진행된다. 전부 429로 실패한 학교는
+            # 기록하지 않아 다음 실행에서 다시 최우선으로 잡힌다.
+            if school_call_ok:
+                record_endpoint_attempt(cur, api_id, school['schl_id'], school['svy_yr'])
             processed_school_count += 1
             commit_cursor(cur)
-    log(f'sync-school-indicators batch completed {batch_context} processed_schools={processed_school_count} skipped_requests={skipped_request_count}')
+    status_text = 'aborted' if aborted else 'completed'
+    log(f'sync-school-indicators batch {status_text} {batch_context} processed_schools={processed_school_count} skipped_requests={skipped_request_count}')
 
 
 def replay_school_indicator_skips(cur, endpoints, args):
@@ -1458,10 +1604,8 @@ def sync_startup_support(cur, endpoints, scope, school_offset=0, school_limit=No
                 'schlId': school['schl_id'],
             }
             items = fetch_pages(endpoint, params, 'sync_startup_support')
-            rows = []
             for idx, item in enumerate(items, start=1):
-                rows.extend(build_startup_support_rows(endpoint_name(endpoint['path']), item, params, idx))
-            insert_startup_support(cur, rows)
+                insert_startup_support(cur, endpoint_name(endpoint['path']), item, params, idx)
             log(f'{endpoint["path"]} {school["schl_id"]}/{school["svy_yr"]} {len(items)}건 반영')
 
 
@@ -1513,6 +1657,8 @@ def run_job(args):
                     school_id=args.school_id,
                     svy_yr=args.svy_yr,
                     indicator_code=args.indicator_code,
+                    stale_limit=args.stale_limit,
+                    max_consecutive_skips=args.max_consecutive_skips,
                 )
             elif args.job == 'replay-school-indicator-skips':
                 replay_school_indicator_skips(
@@ -1601,6 +1747,18 @@ def build_parser():
         help='학교 배치 크기 (sync-subject-master, sync-school-indicators, sync-startup-support용)',
     )
     parser.add_argument(
+        '--stale-limit',
+        type=int,
+        default=None,
+        help='수집이 오래된 학교부터 N개만 실행 (sync-school-indicators 전용, 크론 기본 경로)',
+    )
+    parser.add_argument(
+        '--max-consecutive-skips',
+        type=int,
+        default=SCHOOL_INDICATOR_MAX_CONSECUTIVE_SKIPS,
+        help=f'연속 429 skip이 N건을 넘으면 run 중단 (0이면 비활성, 기본 {SCHOOL_INDICATOR_MAX_CONSECUTIVE_SKIPS})',
+    )
+    parser.add_argument(
         '--school-id',
         default='',
         help='특정 학교 ID만 실행 (주로 sync-school-indicators 복구용)',
@@ -1634,9 +1792,25 @@ def build_parser():
     return parser
 
 
+def validate_args(args):
+    """인자 조합을 검증한다. 문제가 있으면 ValueError를 던진다."""
+    if getattr(args, 'stale_limit', None) is None:
+        return
+    if args.job != 'sync-school-indicators':
+        raise ValueError('--stale-limit는 sync-school-indicators 에서만 사용할 수 있습니다')
+    if args.school_offset or args.school_limit is not None:
+        raise ValueError('--stale-limit와 --school-offset/--school-limit는 함께 사용할 수 없습니다')
+    if args.stale_limit < 1:
+        raise ValueError('--stale-limit는 1 이상이어야 합니다')
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    try:
+        validate_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.job == 'replay-school-indicator-skips' and args.skip_tsv == '':
         args.skip_tsv = str(default_school_indicator_skip_tsv())
     run_job(args)
