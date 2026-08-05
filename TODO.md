@@ -9,15 +9,16 @@
 > - 학교당 40콜(엔드포인트별 최대 754/1,000)로 축소 → **stale 롤링 폐기, 377개교 전량 매일 수집**으로 전환
 > - 엔드포인트별 예산(900) + 429 서킷 브레이커(연속 5) 추가, 요청 지연 0.6/3.0초 → 0.1초
 > - 크론 교체 완료 (잡 16→15): `--stale-limit 13` 제거, 04:10 replay 잡 삭제
-> - 검증: 스모크 38콜/43행, 20개교 760콜 전량 성공, 브레이커 5건 정확 발동, 8초/학교 → 377개교 약 53분
+> - 검증: 스모크 38콜/43행, 20개교 760콜 전량 성공, 브레이커 5건 정확 발동
+> - **377개교 전량 수동 실행 실증** — 59분 53초, 14,326콜(=377×38) 성공, 적재 14,169행, 시도 대장 377개교 전원, 최대 소비 엔드포인트 754/1,000(75%)로 예산 900 적정 확인
 >
 > **남은 작업:**
-> - 내일 02:30 첫 전량 실행 로그 검증 — 실런타임(53분 추정), Research/Ensure 각 754콜 완주, 시도 대장 377×38 도달
+> - 08-06 02:30 크론 경로 확인 — flock 획득·로그 append 정상 동작만 (수치는 오늘 전량 실행으로 선검증 완료)
 > - 서버 `nzndb-update` push 미승인 — 서버 커밋 `a432584`, `6316bbd` 가 서버에만 있음
 > - 서버 career, academyinfo 수집/DB 구축 계속 개발, 실유입 검증
 > - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
 >
-> **다음에 시작할 곳:** 08-06 02:30 배치 로그(`logs/sync_school_indicator_batch.log`) 확인. 754콜 완주가 확인되면 예산 900 적정성 확정. RDS `max_connections` 확대·`MAX_USER_CONNECTIONS` 계정 격리는 설계문서 §11 후속 권고(별도 승인 필요).
+> **다음에 시작할 곳:** 08-06 02:30 배치 로그(`logs/sync_school_indicator_batch.log`) 확인 — `batch completed`·콜수 14,326+754 여부. RDS `max_connections` 확대·`MAX_USER_CONNECTIONS` 계정 격리는 설계문서 §11 후속 권고(별도 승인 필요).
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
@@ -29,7 +30,8 @@
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
 - [ ] 서버 nzndb-update 커밋 `a432584`, `6316bbd` push (미승인 상태)
 - [x] 2026-08-05 academyinfo school_indicator 첫 실실행 로그로 `--stale-limit 13` 재튜닝 → stale 롤링 폐기, 전량 매일 수집으로 전환
-- [ ] academyinfo school_indicator 전량 cron 첫 실실행(08-06 02:30) 후 batch 로그·콜수·시도 대장 검증
+- [x] 2026-08-05 academyinfo school_indicator 전량 수집 실증 — 377개교 59분 53초, 14,326콜 성공, 적재 14,169행
+- [ ] academyinfo school_indicator 크론 경로 확인 (08-06 02:30 flock 획득·로그 append)
 - [ ] academyinfo skip TSV 아카이브(`logs/archive/sync_school_indicator_skips-20260805.tsv`) 폐기 여부 판단
 - [ ] (나중에) robocode-admin school_indicator 모니터링 로그 기준을 a~d 에서 batch 로 변경
 - [ ] (나중에) career sync-subject-detail 월배치 첫 실실행 후 로그/적재 건수 검증
