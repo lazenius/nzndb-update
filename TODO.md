@@ -12,8 +12,12 @@
 > - 검증: 스모크 38콜/43행, 20개교 760콜 전량 성공, 브레이커 5건 정확 발동
 > - **377개교 전량 수동 실행 실증** — 59분 53초, 14,326콜(=377×38) 성공, 적재 14,169행, 시도 대장 377개교 전원, 최대 소비 엔드포인트 754/1,000(75%)로 예산 900 적정 확인
 >
+> - **저장소 구조 정립 (08-06)** — 서버를 origin/main 에 재정렬해 06-27부터의 히스토리 분기 해소. 서버가 코드 SoT 겸 push 주체(`0a6b226`), 로컬은 sparse-checkout 으로 코드 없이 문서만. 규칙은 AGENTS.md §저장소 운용에 명문화
+> - 단위 테스트 24개로 확장 (화이트리스트·예산 절단·브레이커·시도 대장 신규 4건), 전량 통과
+>
 > **남은 작업:**
-> - 08-06 02:30 크론 경로 확인 — flock 획득·로그 append 정상 동작만 (수치는 오늘 전량 실행으로 선검증 완료)
+> - 08-06 02:30 크론 경로 확인 — flock 획득·로그 append 정상 동작만 (수치는 전량 실행으로 선검증 완료)
+> - 서버 `/var/www/html/update` 가 웹 루트 아래 — Nginx 에서 접근 차단돼 있는지 확인 (코드·문서 노출 여부)
 > - 서버 `nzndb-update` push 미승인 — 서버 커밋 `a432584`, `6316bbd` 가 서버에만 있음
 > - 서버 career, academyinfo 수집/DB 구축 계속 개발, 실유입 검증
 > - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
@@ -28,7 +32,7 @@
 - [x] 2026-06-30 ECC 플러그인 설치 및 Codex 인식 확인
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
-- [ ] 서버 nzndb-update 커밋 `a432584`, `6316bbd` push (미승인 상태)
+- [x] 2026-08-06 서버 nzndb-update push 정상화 — 서버를 origin/main 에 재정렬, 서버가 직접 push (`0a6b226`). 로컬은 sparse-checkout 문서 전용으로 전환
 - [x] 2026-08-05 academyinfo school_indicator 첫 실실행 로그로 `--stale-limit 13` 재튜닝 → stale 롤링 폐기, 전량 매일 수집으로 전환
 - [x] 2026-08-05 academyinfo school_indicator 전량 수집 실증 — 377개교 59분 53초, 14,326콜 성공, 적재 14,169행
 - [ ] academyinfo school_indicator 크론 경로 확인 (08-06 02:30 flock 획득·로그 append)
