@@ -1,33 +1,36 @@
 <!-- 다음 세션 시작 메모 — 자동 생성, 수동 편집 금지 -->
-> **마지막 세션:** 2026-08-05 | 커밋 `55ea5f8`
+> **마지막 세션:** 2026-08-05 | 로컬 `7df4baa` 이후 / 서버 `6316bbd`
 >
 > **완료한 작업:**
-> - RDS 커넥션 고갈 장애 원인 규명 — 배치 1회 51분 > 크론 간격 30분으로 구조적 중첩, 27 프로세스 동시 실행 → `(1040) Too many connections`
-> - school-indicators 를 stale-first 롤링으로 전환 (`--stale-limit`, `recv_time` 최오래된 순, 하루 13학교 ≈ 월 1회전)
-> - 429 이중 백오프 제거 (180초 → 5초) + `--max-consecutive-skips` 로 런타임 상한
-> - 크론 14슬롯 재배치, 전 잡 `flock -n` 적용, 경부하 잡을 01:00~01:55 로 분리
-> - logrotate `/etc/logrotate.d/nzndb-update` 설치, 7.5MB 폭주 잔재 1회 강제 회전
-> - 커버링 인덱스는 실측(4,922행·17.3ms) 후 순손실 판단하여 철회
+> - 첫 실실행(08-05 02:30) 점검 — 전량 적재 0건, 04:10 timeout kill, replay 락 충돌로 미실행 확인
+> - 429 진짜 원인 규명: **엔드포인트당 일일 1,000회 한도**. 3일 연속 성공 호출이 정확히 1,000에서 끊김. 차단·제재 아님, 자정 리셋 정상
+> - 원인은 indctId 팬아웃 — 유효 코드 2개(`66`,`67`)인데 83개 전량 곱함. `13학교 × 83 = 1,079 > 1,000` 로 설계 시점부터 한도 초과값
+> - livelock 발견·해소 — 0건 응답 학교는 `recv_time` 이 안 올라가 같은 13개교 무한 재선정. `school_indicator_attempt` 대장 신설
+> - 학교당 40콜(엔드포인트별 최대 754/1,000)로 축소 → **stale 롤링 폐기, 377개교 전량 매일 수집**으로 전환
+> - 엔드포인트별 예산(900) + 429 서킷 브레이커(연속 5) 추가, 요청 지연 0.6/3.0초 → 0.1초
+> - 크론 교체 완료 (잡 16→15): `--stale-limit 13` 제거, 04:10 replay 잡 삭제
+> - 검증: 스모크 38콜/43행, 20개교 760콜 전량 성공, 브레이커 5건 정확 발동, 8초/학교 → 377개교 약 53분
 >
 > **남은 작업:**
-> - 서버 `nzndb-update` push 미승인 상태 — 서버 커밋 `a432584` 가 로컬에만 있음
-> - 첫 실실행(02:30/04:10) 로그로 `--stale-limit 13` 재튜닝 — 74분 추정 대비, 야간 429 비율
+> - 내일 02:30 첫 전량 실행 로그 검증 — 실런타임(53분 추정), Research/Ensure 각 754콜 완주, 시도 대장 377×38 도달
+> - 서버 `nzndb-update` push 미승인 — 서버 커밋 `a432584`, `6316bbd` 가 서버에만 있음
 > - 서버 career, academyinfo 수집/DB 구축 계속 개발, 실유입 검증
 > - robocode-admin/db/ 에 update DB 모니터링용 html/php 페이지 계속 구축
 >
-> **다음에 시작할 곳:** 첫 실실행 로그 확인 후 `--stale-limit` 확정. RDS `max_connections` 확대·`MAX_USER_CONNECTIONS` 계정 격리는 설계문서 §11 후속 권고(별도 승인 필요).
+> **다음에 시작할 곳:** 08-06 02:30 배치 로그(`logs/sync_school_indicator_batch.log`) 확인. 754콜 완주가 확인되면 예산 900 적정성 확정. RDS `max_connections` 확대·`MAX_USER_CONNECTIONS` 계정 격리는 설계문서 §11 후속 권고(별도 승인 필요).
 <!-- /다음 세션 시작 메모 -->
 
 - [ ] caveman 모드 적용 유지
-- [ ] academyinfo skip TSV 실발생분 재처리 후 누락 여부 재검증
+- [x] 2026-08-05 academyinfo skip TSV 실발생분 재처리 후 누락 여부 재검증 → 11,338행 중 99.96%가 한도 소진분이라 재처리 무의미, replay 경로 폐기
 - [x] 2026-07-02 로컬 도커 서버에 update 폴더 연결
-- [ ] academyinfo HTTP 429, school_master lock wait timeout 원인 파악
+- [x] 2026-08-05 academyinfo HTTP 429 원인 파악 — 엔드포인트당 일일 1,000회 한도 소진 (indctId 83개 팬아웃)
 - [x] 2026-06-30 ECC 플러그인 설치 및 Codex 인식 확인
 
 - [ ] 서버 career, academyinfo 수집/DB 구축 계속 개발, cron 등록, 실유입 검증
-- [ ] 서버 nzndb-update 커밋 `a432584` push (미승인 상태)
-- [ ] academyinfo school_indicator 첫 실실행 로그로 `--stale-limit 13` 재튜닝
-- [ ] (나중에) academyinfo school_indicator 롤링 cron 첫 실실행 후 batch 로그/누락 건수 검증
+- [ ] 서버 nzndb-update 커밋 `a432584`, `6316bbd` push (미승인 상태)
+- [x] 2026-08-05 academyinfo school_indicator 첫 실실행 로그로 `--stale-limit 13` 재튜닝 → stale 롤링 폐기, 전량 매일 수집으로 전환
+- [ ] academyinfo school_indicator 전량 cron 첫 실실행(08-06 02:30) 후 batch 로그·콜수·시도 대장 검증
+- [ ] academyinfo skip TSV 아카이브(`logs/archive/sync_school_indicator_skips-20260805.tsv`) 폐기 여부 판단
 - [ ] (나중에) robocode-admin school_indicator 모니터링 로그 기준을 a~d 에서 batch 로 변경
 - [ ] (나중에) career sync-subject-detail 월배치 첫 실실행 후 로그/적재 건수 검증
 - [ ] (나중에) career sync-aptitude-meta 월배치 첫 실실행 후 로그/적재 건수 검증
@@ -57,6 +60,7 @@
 - [ ] robocode-admin/db 서버본을 로컬에도 동기화
 - [ ] nznlab/db/career, academyinfo 서버본을 로컬에도 동기화
 ## 완료
+- [x] 2026-08-05 academyinfo 수집을 엔드포인트 일일 한도(1,000회) 기반 전량 매일 수집으로 전환 — 429 원인이 indctId 83개 팬아웃에 의한 한도 소진임을 실측 규명, indctId 화이트리스트·엔드포인트 예산·429 서킷 브레이커·시도 대장(livelock 해소) 도입, 크론 잡 16→15 (서버 `6316bbd`)
 - [x] 2026-08-05 [버그] academyinfo school_indicator_list OpenAPI HTTP 429 완화 및 롤링 cron 배치 안정화 — RDS 커넥션 고갈 장애 원인 규명, stale-first 롤링 전환, flock 도입, 크론 14슬롯 재배치, logrotate 설치
 - [x] 2026-07-20 academyinfo 창업지원 적재 배치화 및 startup_support_list 학교·연도 인덱스 반영
 - [x] 2026-07-06 academyinfo skip TSV 재처리 커맨드 설계/구현 및 서버 스모크 검증

@@ -4,6 +4,11 @@
 - 대상: 서버 `/var/www/html/update` (academyinfo, career 수집 크론)
 - 계기: 2026-08-03 ~ 08-04 RDS 커넥션 고갈 및 사이트 접속 장애
 
+> **2026-08-05 개정 — 이 문서의 §4 스케줄·§5.1 대상 선정·§5.3 429 처리는 폐기되었다.**
+> 첫 실실행(08-05 02:30) 점검에서 429의 진짜 원인이 **OpenAPI 엔드포인트당 일일 1,000회
+> 한도**임이 확정되어, stale 롤링 자체가 불필요해졌다. 확정된 현행 설계는 문서 맨 끝
+> [§13 2026-08-05 개정](#13-2026-08-05-개정--엔드포인트-일일-한도-기반-전량-수집) 을 볼 것.
+
 ---
 
 ## 1. 배경 — 장애 원인 분석
@@ -407,5 +412,90 @@ ALTER USER '<batch_user>'@'%' WITH MAX_USER_CONNECTIONS 5;
 | `academyinfo/update_academyinfo.py` | 수집기 본체 (`sync_school_indicators` 1320행, `replay_school_indicator_skips` 1378행) |
 | `academyinfo/include/common.py` | `connect_db`, `fetch_pages` (429 재시도 160행대) |
 | `academyinfo/logs/sync_school_indicator_batch.log` | 장애 근거 로그 |
-| `academyinfo/logs/sync_school_indicator_skips.tsv` | 429 skip 기록 |
+| `academyinfo/logs/sync_school_indicator_skips.tsv` | 429 skip 기록 (08-05 `logs/archive/` 로 이동) |
 | 서버 `crontab -l` (ec2-user) | 스케줄 |
+
+---
+
+## 13. 2026-08-05 개정 — 엔드포인트 일일 한도 기반 전량 수집
+
+첫 실실행 점검에서 §1의 원인 분석이 부분적으로 틀렸음이 드러났다. 이 절이 현행 설계다.
+서버 커밋 `6316bbd`.
+
+### 13.1 확정된 사실
+
+**429는 버스트가 아니라 OpenAPI 엔드포인트(오퍼레이션)당 일일 1,000회 한도 소진이다.**
+
+로그 실측 — `getComparisonFullTimeFacultyResearchCrntSt` 성공 호출 수:
+
+| 날짜 | 성공 | 429 |
+|---|---|---|
+| 08-03 | **정확히 1,000** | 5,712 |
+| 08-04 | **정확히 1,000** | 5,556 |
+| 08-05 | **정확히 1,000** | 48 |
+
+08-05 타임라인: 02:32:12 첫 호출 → 03:24:02 1,000번째 성공 → 03:24:58 첫 429 →
+04:10 timeout kill. 자정 리셋은 정상 동작하며, 엔드포인트가 차단된 것이 아니다.
+
+한도를 넘긴 원인은 **indctId 팬아웃**이다. `indctId` 필수 엔드포인트 2개에 `code_list`
+`key_indicator` 83개를 전부 곱했다. `13학교 × 83코드 = 1,079 > 1,000` — `--stale-limit 13`
+은 설계 시점부터 한도 초과값이었다.
+
+실측 스윕(학교 0000003 / 0000005, 83코드 전량)으로 확인한 유효 코드:
+
+| 엔드포인트 | 유효 indctId | 비고 |
+|---|---|---|
+| `getComparisonFullTimeFacultyResearchCrntSt` | `66`, `67` | 나머지 81개는 빈 응답 |
+| `getComparisonFullTimeFacultyEnsureCrntSt` | `66`, `67` | 동일 |
+| `getNoticeFullTimeFacultyResearchCrntSt` | (불필요) | 1콜에 54~60 7건 반환 |
+
+### 13.2 폐기된 §4·§5.1·§5.3
+
+학교당 호출이 40회(비FAN 36 + FAN 2×2)로 줄어, 엔드포인트별 일일 호출이
+**최대 754회 / 한도 1,000회(75%)** 가 된다. 전 엔드포인트가 한도 안에 들어오므로
+**377개교 전량 매일 수집**이 가능하다. stale 롤링·replay 창은 존재 이유가 사라졌다.
+
+| 항목 | 구(舊) | 현행 |
+|---|---|---|
+| 대상 선정 | `--stale-limit 13` (`recv_time` 오래된 순) | 전량 377개교 |
+| 회전 주기 | 약 30일 | 매일 |
+| replay 잡 (04:10) | 별도 슬롯 | **제거** |
+| 요청 지연 | 0.6초 / 엔드포인트별 3.0초 | 0.1초 (실측 응답 0.131초) |
+
+### 13.3 신규 안전장치
+
+**엔드포인트별 일일 호출 예산** — `SCHOOL_INDICATOR_ENDPOINT_CALL_BUDGET = 900`
+(한도의 90%). 예산으로 전 학교를 못 덮으면 시도가 오래된 학교부터 자르고 나머지는
+다음 실행이 이어받는다. 현재는 754 < 900 이라 발동하지 않는 가드다.
+
+**`school_indicator_attempt` 대장** — 08-05 실측된 livelock 해소.
+`school_indicator_list.recv_time` 은 행이 적재된 학교만 갱신되므로, 데이터가 없어 0건이
+오는 학교는 순번이 영원히 갱신되지 않아 같은 13개교가 무한 재선정됐다(08-05 실제 발생,
+당일 적재 0행). 적재 여부와 무관하게 시도 자체를 기록해 회전시킨다.
+
+**엔드포인트 단위 429 서킷 브레이커** — `SCHOOL_INDICATOR_ENDPOINT_429_BREAKER = 5`.
+연속 429가 5건이면 해당 엔드포인트만 이번 run에서 포기한다. 한도 소진은 그날 안에
+회복되지 않으므로 계속 두드릴 이유가 없다. 08-05 45분 재시도 폭주의 재발 방지.
+
+### 13.4 현행 크론
+
+```
+30 2 * * * cd /var/www/html/update/academyinfo && \
+  flock -n /var/www/html/update/.locks/academyinfo-school-indicator.lock \
+  timeout -k 60 6000 /usr/bin/python3 update_academyinfo.py \
+  sync-school-indicators --scope latest >> logs/sync_school_indicator_batch.log 2>&1
+```
+
+`--stale-limit 13` 제거. 04:10 replay 잡 삭제(잡 16개 → 15개). flock·timeout 유지.
+
+### 13.5 검증 (08-05 실측)
+
+| 항목 | 결과 |
+|---|---|
+| 스모크 (학교 0000003, 전 엔드포인트) | 38콜 성공, 43행 적재, 시도 대장 37건 |
+| 검증 실행 (20개교) | 760콜 성공 = 20 × 38, 시도 대장 740행 |
+| 서킷 브레이커 | 연속 429 5건에서 정확히 발동, 잔여 15개교 호출 차단 |
+| 런타임 | 20개교 실작업 약 2분 40초 = **8초/학교** → 377개교 **약 53분** (timeout 100분) |
+
+미확인: 내일 02:30 첫 전량 실행의 실런타임, Research/Ensure 각 754콜 완주,
+시도 대장 377 × 38 도달.
