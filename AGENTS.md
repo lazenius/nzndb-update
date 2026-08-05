@@ -9,10 +9,20 @@
 
 ## 현재 원칙
 
-- 이 프로젝트는 여전히 **도메인별 수집/적재 자산을 모으는 기준 저장소**다.
-- 현재는 `academyinfo`, `career` 기준 문서와 수집기 스크립트가 함께 관리된다.
-- **실제 프로그램 개발·실행·테스트·cron 검증은 서버 `/var/www/html/update` 기준으로 진행한다.**
+- 이 프로젝트는 **도메인별 수집/적재 자산을 모으는 기준 저장소**다. 현재 `academyinfo`, `career`.
+- **개발·실행·테스트·cron 검증은 전부 서버 `/var/www/html/update` 에서 한다.**
 - 런타임 산출물(`logs/`, `raw/`)과 비밀 설정(`common_local.py`)은 Git 추적 대상에서 제외한다.
+
+## 파일이 어디 있나
+
+| 종류 | 위치 | 비고 |
+|---|---|---|
+| 수집기 코드 (`update_academyinfo.py`, `update_career.py`) | 서버만 | 로컬 사본 없음 |
+| 단위 테스트 (`academyinfo/tests/`) | 서버만 | `python3 -m unittest discover -s tests` |
+| crontab 스냅샷 (`deploy/crontab.ec2-user`) | 서버만 | 크론 변경 시 `crontab -l >` 로 갱신 |
+| 스펙·설계 문서 (`*.md`, `docs/`) | 로컬에서 편집 → 서버로 올려 커밋 | 양쪽에 존재 |
+| 비밀 설정 (`include/common_local.py`) | 서버만 | git 제외, `_lab/CLAUDE.local.md` 가 SoT |
+| 로그·원본 XML (`logs/`, `raw/`) | 서버만 | git 제외, logrotate 적용 |
 
 ## 저장소 운용 (2026-08-06 정립 — irio 방식)
 
@@ -26,8 +36,25 @@
 - **커밋·push 주체는 서버 하나뿐이다.** 코드를 고쳤으면 서버에서 바로
   `git add -A && git commit && git push`.
 - 로컬에는 코드 사본을 두지 않는다. 코드를 봐야 하면 `ssh nazuni.net` 으로 읽는다.
-- 로컬 문서는 버전관리하지 않는다. 세션 지침·설계 메모용 작업 파일이다.
 - 로컬에서 `/ship` 은 쓰지 않는다 (git 이 없다). 서버 커밋은 명시적으로 지시한다.
+- 문서는 로컬에서 편집하고, 의미 있는 변경이면 `scp` 로 서버에 올려 **서버에서 커밋**한다.
+  로컬 문서 자체에는 이력이 없으므로 GitHub 사본이 유일한 백업이다.
+
+### 작업 절차
+
+```bash
+# 코드 수정 (전부 서버에서)
+ssh nazuni.net
+cd /var/www/html/update/academyinfo
+# ... 수정 ...
+python3 -m unittest discover -s tests      # 커밋 전 필수
+cd /var/www/html/update
+git add -A && git commit -m "fix: ..." && git push
+
+# 문서 수정 (로컬 편집 → 서버 반영)
+scp AGENTS.md nazuni.net:/var/www/html/update/AGENTS.md
+ssh nazuni.net "cd /var/www/html/update && git add -A && git commit -m 'docs: ...' && git push"
+```
 
 > 2026-06-27 ~ 08-05 사이 로컬에도 git 이 있어 양쪽에서 커밋이 이뤄졌고, 같은 작업이
 > 다른 해시로 중복돼 히스토리가 분기했다. 08-06 에 서버를 origin/main 으로 재정렬하고
