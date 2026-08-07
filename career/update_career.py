@@ -5,6 +5,8 @@ import json
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from time import sleep
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 import xml.etree.ElementTree as ET
@@ -16,6 +18,7 @@ from include.crawler_common import connect_db, ensure_dict, ensure_list, float_o
 BASE_DIR = Path(__file__).resolve().parent
 COLLECTION_PLAN_PATH = BASE_DIR / 'COLLECTION_PLAN.md'
 SYNC_JOB_DETAIL_LOG_NAME = 'sync_job_detail.log'
+LEGACY_XML_MAX_ATTEMPTS = 3
 
 
 CREATE_STATEMENTS = [
@@ -571,9 +574,19 @@ def build_legacy_xml_url(params):
 
 def fetch_legacy_xml(params):
     url = build_legacy_xml_url(params)
-    with urlopen(url, timeout=120) as response:
-        payload = response.read().decode('utf-8')
-    return url, payload
+    for attempt in range(1, LEGACY_XML_MAX_ATTEMPTS + 1):
+        try:
+            with urlopen(url, timeout=120) as response:
+                payload = response.read().decode('utf-8')
+            return url, payload
+        except HTTPError as exc:
+            if not 500 <= exc.code < 600 or attempt == LEGACY_XML_MAX_ATTEMPTS:
+                raise
+            log(
+                f'HTTP {exc.code} 응답, {attempt}초 후 재시도 '
+                f'({attempt}/{LEGACY_XML_MAX_ATTEMPTS - 1}): {common.safe_url(url)}'
+            )
+            sleep(attempt)
 
 
 def parse_xml_contents(payload):

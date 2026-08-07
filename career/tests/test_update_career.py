@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from urllib.error import HTTPError
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 MODULE_PATH = BASE_DIR / 'update_career.py'
@@ -16,6 +17,42 @@ def load_module():
 
 
 class UpdateCareerTest(unittest.TestCase):
+    def test_fetch_legacy_xml_retries_http_500(self):
+        module = load_module()
+        attempts = []
+        sleeps = []
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'<response />'
+
+        def fake_urlopen(url, timeout):
+            attempts.append((url, timeout))
+            if len(attempts) == 1:
+                raise HTTPError(url, 500, '', {}, None)
+            return DummyResponse()
+
+        module.build_legacy_xml_url = lambda params: 'https://example.com/test'
+        module.urlopen = fake_urlopen
+        module.sleep = lambda seconds: sleeps.append(seconds)
+        module.log = lambda message: None
+
+        try:
+            url, payload = module.fetch_legacy_xml({'svcCode': 'MAJOR_VIEW'})
+        except HTTPError:
+            self.fail('HTTP 500 응답을 재시도하지 않았습니다')
+
+        self.assertEqual('https://example.com/test', url)
+        self.assertEqual('<response />', payload)
+        self.assertEqual(2, len(attempts))
+        self.assertEqual([1], sleeps)
+
     def test_safe_url_masks_apikey_lowercase(self):
         module = load_module()
 
